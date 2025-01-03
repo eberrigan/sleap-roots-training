@@ -169,3 +169,15 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# training runs end with .v000, .v001, etc.
+*.v[0-9][0-9][0-9]
+
+# pipeline outputs .png, .csv, .json, etc.
+# will be used in test data
+# *.png
+# *.csv
+# *.json
+
+# wandb logs
+wandb/
