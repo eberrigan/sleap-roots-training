@@ -181,3 +181,9 @@ cython_debug/
 
 # wandb logs
 wandb/
+
+# jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# don't add SLEAP data to git
+*.slp
