@@ -7,6 +7,11 @@ import numpy as np
 
 from matplotlib.patches import ConnectionPatch
 from pathlib import Path
+from typing import List
+from wandb.sdk.wandb_run import Run
+from wandb.sdk.artifacts.artifact import Artifact
+
+from sleap_roots_training.config import CONFIG
 
 
 def create_artifact_name(group: str, version: str) -> str:
@@ -43,20 +48,8 @@ def fetch_model_artifact(run: wandb.run, entity_name: str, registry: str, artifa
     artifact = run.use_artifact(f"{full_artifact_name}")
     return artifact
 
-def get_distances(artifact: wandb.Artifact):
-    """Return the distances dataframe from a model artifact.
-    
-    Args:
-        artifact (wandb.Artifact): The model artifact.
-        
-    Returns:
-        pd.DataFrame: The distances dataframe.
-    """
-    distances = artifact.get("distances.csv")
-    distances_df = pd.read_csv(distances)
-    return distances_df
 
-def get_eval_metadata(artifact: wandb.Artifact, metadata_key: str="dist_avg"):
+def get_eval_metadata(artifact: wandb.Artifact, metadata_key: str="dist_avg") -> float:
     """Return model artifact metric from metadata.
     
     Args:
@@ -70,7 +63,7 @@ def get_eval_metadata(artifact: wandb.Artifact, metadata_key: str="dist_avg"):
     return metadata.get(metadata_key)
 
 
-def get_predictions(filename: str, model_path, overwrite=False):
+def get_predictions(filename: str, model_path:str, overwrite=False) -> sleap.Labels:
     """Get predictions for a given video file and model path.
     
     Args:
@@ -79,7 +72,7 @@ def get_predictions(filename: str, model_path, overwrite=False):
         overwrite (bool): Whether to overwrite existing predictions. Default is False.
         
     Returns:
-        sleap.Predictions: The predictions object.
+        sleap.Labels: The predictions object.
     """
     predictor = sleap.load_model(model_path, progress_reporting="none")
     predictor_name = Path(model_path).stem
@@ -103,25 +96,34 @@ def get_test_data(model_artifact: wandb.Artifact) -> sleap.Labels:
         sleap.Labels: The test data labels.
     """
     # Get the manifest entry for the test data file
-    test_data_entry = model_artifact.get_entry("labels_gt.test.slp")
+    config_entry = model_artifact.get_entry("training_config.json")
 
     # Download the file locally
-    test_data_path = test_data_entry.download()
+    config_path = config_entry.download()
 
     # Load the file using SLEAP
-    return sleap.load_file(test_data_path)
+    cfg = sleap.load_config(config_path)
+    sleap_labels = sleap.load_file(cfg.data.labels.test_labels)
+    print(f"Loaded test data from {cfg.data.labels.test_labels}.")
+    return sleap_labels
 
 
-def predictions_viz(output_dir: str, filename: str, frame_idx: int = 1, model_version: str = "002", overwrite=False):
+def predictions_viz(output_dir: str, filename: str, groups:List[str], frame_idx: int = 1, model_version: str = "002", overwrite=False):
     """Function to fetch model artifacts, run predictions, and save visualizations.
 
     Args:
         output_dir (str): Path to save outputs.
         filename (str): Path to the video file for predictions.
+        groups (List[str]): List of group names to fetch artifacts from.
         frame_idx (int): Frame index for visualization. Default is 1.
         model_version (str): Model version to fetch from the registry. Default is "002".
         overwrite (bool): Whether to overwrite existing predictions. Default is False.
     """
+    PROJECT_NAME = CONFIG["project_name"]
+    ENTITY_NAME = CONFIG["entity_name"]
+    EXPERIMENT_NAME = CONFIG["experiment_name"]
+    REGISTRY = CONFIG["registry"]
+
     # Initialize W&B run
     run = wandb.init(
         project=PROJECT_NAME,
@@ -133,7 +135,7 @@ def predictions_viz(output_dir: str, filename: str, frame_idx: int = 1, model_ve
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    for group in GROUPS:
+    for group in groups:
         artifact_name = create_artifact_name(group, model_version)
         try:
             artifact = fetch_model_artifact(
@@ -166,106 +168,112 @@ def predictions_viz(output_dir: str, filename: str, frame_idx: int = 1, model_ve
     run.finish()
 
 
-    def predictions_viz_multiple_files(
-    output_dir: str, filenames: list, frame_idx: int = 1, model_version: str = "002", overwrite=False
-):
-    """Visualize predictions for multiple files and models in a grid.
+def predictions_viz_multiple_files(
+    output_dir: str, filenames: list, groups: List[str], frame_idx: int = 1, model_version: str = "002", overwrite=False
+    ):
+        """Visualize predictions for multiple files and models in a grid.
 
-    Args:
-        output_dir (str): Path to save outputs.
-        filenames (list): List of video file paths for predictions.
-        frame_idx (int): Frame index for visualization. Default is 1.
-        model_version (str): Model version to fetch from the registry. Default is "002".
-        overwrite (bool): Whether to overwrite existing predictions. Default is False.
+        Args:
+            output_dir (str): Path to save outputs.
+            filenames (list): List of video file paths for predictions.
+            groups (List[str]): List of group names to fetch model artifacts from.
+            frame_idx (int): Frame index for visualization. Default is 1.
+            model_version (str): Model version to fetch from the registry. Default is "002".
+            overwrite (bool): Whether to overwrite existing predictions. Default is False.
 
-    Returns:
-        None
-    """
-    # Initialize W&B run
-    run = wandb.init(
-        project=PROJECT_NAME,
-        entity=ENTITY_NAME,
-        name=EXPERIMENT_NAME,
-        job_type="predictions_viz_multiple",
-        tags=TAGS,
-        group=EXPERIMENT_NAME
-    )
+        Returns:
+            None
+        """
+        PROJECT_NAME = CONFIG["project_name"]
+        ENTITY_NAME = CONFIG["entity_name"]
+        EXPERIMENT_NAME = CONFIG["experiment_name"]
+        REGISTRY = CONFIG["registry"]
 
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
+        # Initialize W&B run
+        run = wandb.init(
+            project=PROJECT_NAME,
+            entity=ENTITY_NAME,
+            name=EXPERIMENT_NAME,
+            job_type="predictions_viz_multiple",
+            tags=groups, # Add group names as tags
+            group=EXPERIMENT_NAME
+        )
 
-    num_files = len(filenames)
-    num_models = len(GROUPS)
-    fig, axes = plt.subplots(num_files, num_models, figsize=(5 * num_models, 5 * num_files))
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    for file_idx, filename in enumerate(filenames):
-        if not Path(filename).exists():
-            print(f"File not found: {filename}")
-            continue
+        num_files = len(filenames)
+        num_models = len(groups)
+        fig, axes = plt.subplots(num_files, num_models, figsize=(5 * num_models, 5 * num_files))
 
-        for model_idx, group in enumerate(GROUPS):
-            artifact_name = create_artifact_name(group, model_version)
-            try:
-                artifact = fetch_model_artifact(
-                    run=run,
-                    entity_name=ENTITY_NAME,
-                    registry=REGISTRY,
-                    artifact_name=artifact_name,
-                    alias="latest"
-                )
-                artifact_dir = artifact.download(skip_cache=False)
-                print(f"Downloaded artifact: {artifact_name} to {artifact_dir}")
-            except Exception as e:
-                print(f"Error fetching artifact: {artifact_name}. Exception: {e}")
+        for file_idx, filename in enumerate(filenames):
+            if not Path(filename).exists():
+                print(f"File not found: {filename}")
                 continue
 
-            if artifact_dir:
+            for model_idx, group in enumerate(groups):
+                artifact_name = create_artifact_name(group, model_version)
                 try:
-                    predictions = get_predictions(filename, model_path=artifact_dir, overwrite=overwrite)
-                    labeled_frame = predictions[frame_idx]
+                    artifact = fetch_model_artifact(
+                        run=run,
+                        entity_name=ENTITY_NAME,
+                        registry=REGISTRY,
+                        artifact_name=artifact_name,
+                        alias="latest"
+                    )
+                    artifact_dir = artifact.download(skip_cache=False)
+                    print(f"Downloaded artifact: {artifact_name} to {artifact_dir}")
+                except Exception as e:
+                    print(f"Error fetching artifact: {artifact_name}. Exception: {e}")
+                    continue
 
-                    # Custom visualization in the grid
-                    ax = axes[file_idx, model_idx]
-                    plot_custom_img(ax, labeled_frame.image)
-                    plot_custom_instances(ax, labeled_frame.instances, lw=2, ms=50)
+                if artifact_dir:
+                    try:
+                        predictions = get_predictions(filename, model_path=artifact_dir, overwrite=overwrite)
+                        labeled_frame = predictions[frame_idx]
 
-                    if model_idx == 0:
-                        # Add filename label on the left side for each row
-                        fig.text(
-                            x=-0.01,  # Position outside the grid
-                            y=(num_files - file_idx - 0.5) / num_files, # Center vertically in the row
-                            s=Path(filename).stem,  # Filename without extension
-                            ha="right",
-                            va="center",
-                            fontsize=12,
-                            rotation=0,
-                        )
+                        # Custom visualization in the grid
+                        ax = axes[file_idx, model_idx]
+                        plot_custom_img(ax, labeled_frame.image)
+                        plot_custom_instances(ax, labeled_frame.instances, lw=2, ms=50)
 
-                    # Add artifact name label at the bottom for each column
-                    if file_idx == 0:  # Only add artifact name once per column
-                        fig.text(
-                            x=(model_idx + 0.5) / num_models,  # Center horizontally in the column
-                            y=-0.05,  # Slightly below the grid
-                            s=artifact_name,  # Artifact name
-                            ha="right", # Center horizontally
-                            va="center",# Center vertically
-                            fontsize=12,  # Font size for visibility
-                            rotation=45,  # Angled for readability
+                        if model_idx == 0:
+                            # Add filename label on the left side for each row
+                            fig.text(
+                                x=-0.01,  # Position outside the grid
+                                y=(num_files - file_idx - 0.5) / num_files, # Center vertically in the row
+                                s=Path(filename).stem,  # Filename without extension
+                                ha="right",
+                                va="center",
+                                fontsize=12,
+                                rotation=0,
                             )
 
-                except Exception as e:
-                    print(f"Error processing artifact: {artifact_name}. Exception: {e}")
+                        # Add artifact name label at the bottom for each column
+                        if file_idx == 0:  # Only add artifact name once per column
+                            fig.text(
+                                x=(model_idx + 0.5) / num_models,  # Center horizontally in the column
+                                y=-0.05,  # Slightly below the grid
+                                s=artifact_name,  # Artifact name
+                                ha="right", # Center horizontally
+                                va="center",# Center vertically
+                                fontsize=12,  # Font size for visibility
+                                rotation=45,  # Angled for readability
+                                )
 
-    plt.subplots_adjust(left=0.00, # Adjust left margin
-                        right=1.0, # Adjust right margin
-                        top=1.00, # Adjust top margin
-                        bottom=0.00, # Adjust bottom margin
-                        wspace=0.00, # Adjust width space between subplots
-                        hspace=0.00) # Adjust height space between subplots
-    plt.savefig(Path(output_dir) / f"grid_predictions_frame_{frame_idx}.png", bbox_inches='tight', dpi=300) # Save the figure with tight bounding box
-    print(f"Saved grid visualization to {output_dir}/grid_predictions_frame_{frame_idx}.png")
-    plt.show()  # Show the plot
-    plt.close()
-    run.finish()
+                    except Exception as e:
+                        print(f"Error processing artifact: {artifact_name}. Exception: {e}")
+
+        plt.subplots_adjust(left=0.00, # Adjust left margin
+                            right=1.0, # Adjust right margin
+                            top=1.00, # Adjust top margin
+                            bottom=0.00, # Adjust bottom margin
+                            wspace=0.00, # Adjust width space between subplots
+                            hspace=0.00) # Adjust height space between subplots
+        plt.savefig(Path(output_dir) / f"grid_predictions_frame_{frame_idx}.png", bbox_inches='tight', dpi=300) # Save the figure with tight bounding box
+        print(f"Saved grid visualization to {output_dir}/grid_predictions_frame_{frame_idx}.png")
+        plt.show()  # Show the plot
+        plt.close()
+        run.finish()
 
 
 def plot_custom_img(ax, img: np.ndarray):
@@ -314,11 +322,16 @@ def evaluate_model(model_artifact_name: str, test_artifact_name: str, output_dir
             in model artifacts.
         output_dir (str): The directory to save the evaluation results. Default is "output".
         px_per_mm (float): The number of pixels per millimeter for the dataset. Default is 17.0.
+
     Returns:
         sleap.Labels: The predicted labels.
         dict: The evaluation metrics.
     """
-    
+    PROJECT_NAME = CONFIG["project_name"]
+    ENTITY_NAME = CONFIG["entity_name"]
+    EXPERIMENT_NAME = CONFIG["experiment_name"]
+    REGISTRY = CONFIG["registry"]
+
     # Initialize W&B run
     run = wandb.init(
         project=PROJECT_NAME,
@@ -364,7 +377,9 @@ def evaluate_model(model_artifact_name: str, test_artifact_name: str, output_dir
         labels_pr, metrics = sleap.nn.evals.evaluate_model(
             cfg=config, 
             labels_gt=test_data,
-            model=model
+            model=model,
+            save=False, # Do not save the predictions in the models directory
+
             )
 
         # Save predictions
@@ -467,32 +482,47 @@ def evaluate_model(model_artifact_name: str, test_artifact_name: str, output_dir
         return labels_pr, metrics
 
     except Exception as e:
-        print(f"Error during model evaluation: {e}")
+        print(f"Error during model evaluation: {e}. Skipping this model...")
         run.finish()
-        raise e
+        
+        # Return safe empty objects
+        return sleap.Labels() if hasattr(sleap, "Labels") else {}, {}
 
     finally:
         run.finish()
 
 
-def main(csv_path: str="metrics.csv"):
+def main(groups: List[str], versions: List[str], csv_path: str="metrics.csv"):
     """Main function to fetch model artifacts and save metrics to CSV.
 
     Args:
+        groups (List[str]): List of group names to fetch artifacts from.
+        versions (List[str]): List of train/test split versions to fetch for each group.
         csv_path (str): Path to save the CSV file. Default is "metrics.csv".
 
     Returns:
         pd.DataFrame: DataFrame containing the metrics or None if no metrics are found.
     """
+    PROJECT_NAME = CONFIG["project_name"]
+    ENTITY_NAME = CONFIG["entity_name"]
+    EXPERIMENT_NAME = CONFIG["experiment_name"]
+    REGISTRY = CONFIG["registry"]
+
     # Initialize W&B run
-    run = wandb.init(project=PROJECT_NAME, entity=ENTITY_NAME, name=EXPERIMENT_NAME, job_type="fetch_metrics", tags=TAGS, group=EXPERIMENT_NAME)
+    run = wandb.init(project=PROJECT_NAME, 
+                     entity=ENTITY_NAME, 
+                     name=EXPERIMENT_NAME, 
+                     job_type="fetch_metrics", 
+                     tags=groups, 
+                     group=EXPERIMENT_NAME
+                     )
 
     # Make dictionary of artifact metrics
     metrics_dict = {}
 
     # Iterate over all groups and versions
-    for group in GROUPS:
-        for version in VERSIONS:
+    for group in groups:
+        for version in versions:
             artifact_name = create_artifact_name(group, version)
             artifact = fetch_model_artifact(run=run, entity_name=ENTITY_NAME, registry=REGISTRY, artifact_name=artifact_name, alias="latest")
             
@@ -516,7 +546,7 @@ def main(csv_path: str="metrics.csv"):
 
         # Create the artifact
         artifact = wandb.Artifact(
-            name=ARTIFACT_NAME,
+            name="summary_metrics",
             type="metrics",
             metadata=metrics_dict
         )
