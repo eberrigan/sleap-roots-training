@@ -179,8 +179,13 @@ cython_debug/
 # *.csv
 # *.json
 
-# wandb logs
+# wandb
 wandb/
+artifacts/
+
+# viz
+grid_viz/
+prediction_viz/
 
 # jupyter notebook checkpoints
 .ipynb_checkpoints/
