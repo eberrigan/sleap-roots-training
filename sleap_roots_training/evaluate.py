@@ -371,6 +371,7 @@ def evaluate_model(model_artifact_name: str, test_artifact_name: str, output_dir
         predictor = sleap.load_model(model_dir, progress_reporting="none") # Returns `Predictor` object
         print(f"Model loaded successfully from {model_dir}.")
         model = predictor.bottomup_model # Get the underlying `tf.keras.Model`
+        print(f"Bottom-up model loaded successfully: {model}.")
         config = predictor.bottomup_config
 
         # Evaluate model
