@@ -11,6 +11,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "entity_name": "eberrigan-salk-institute-for-biological-studies",
     "experiment_name": None,
     "registry": None,
+    "collection_name": None,
     "job_type": None,
 }
 
@@ -78,3 +79,4 @@ PROJECT_NAME: str = CONFIG["project_name"]
 ENTITY_NAME: str = CONFIG["entity_name"]
 EXPERIMENT_NAME: str = CONFIG["experiment_name"]
 REGISTRY: str = CONFIG["registry"]
+COLLECTION_NAME: str = CONFIG["collection_name"]
