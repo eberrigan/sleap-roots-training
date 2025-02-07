@@ -8,6 +8,7 @@ import seaborn as sns
 import sleap
 import numpy as np
 import logging
+import re
 
 from typing import List, Optional, Dict
 from pathlib import Path
@@ -301,10 +302,13 @@ def update_config_with_wandb(config:dict) -> dict:
     """
     if wandb.config:
         logging.info("Updating configuration with W&B sweep parameters.")
-        logging.info("Initial configuration:\n%s", json.dumps(config, indent=4))
-        logging.info("W&B sweep parameters:\n%s", json.dumps(dict(wandb.config), indent=4))
 
-        for key, value in wandb.config.items():
+        # Extract only parameters that exist in `wandb.config`
+        wandb_sweep_params = dict(wandb.config)
+
+        logging.info("W&B Assigned Parameters: %s", json.dumps(wandb_sweep_params, indent=4))
+
+        for key, value in wandb_sweep_params.items():
             keys = key.split(".")  # Convert "data.preprocessing.input_scaling" to ["data", "preprocessing", "input_scaling"]
 
             # Traverse the dictionary and set the value
@@ -316,8 +320,42 @@ def update_config_with_wandb(config:dict) -> dict:
             logging.info(f"Updated parameter: {key} -> {value}")
 
         logging.info("Final updated configuration:\n%s", json.dumps(config, indent=4))
-    
+
     return config
+
+
+def get_latest_run(models_dir: Path) -> Path:
+    """Gets the latest run directory from the models folder based on timestamp.
+
+    Args:
+        models_dir (Path): Path to the models directory.
+
+    Returns:
+        Path: The latest run directory path, or None if no valid directories exist.
+    """
+    if not models_dir.exists() or not models_dir.is_dir():
+        raise FileNotFoundError(f"Models directory not found: {models_dir}")
+
+    # Regex pattern to extract timestamp from the directory name
+    pattern = re.compile(r"(\d{6}_\d{6})")
+
+    # List all valid directories that match the timestamp pattern
+    valid_dirs = []
+    for dir_path in models_dir.iterdir():
+        if dir_path.is_dir():
+            match = pattern.search(dir_path.name)
+            if match:
+                valid_dirs.append((match.group(1), dir_path))  # Store timestamp and full path
+
+    if not valid_dirs:
+        logging.error("No valid directories found in models folder.")
+        return None  # No valid directories found
+
+    # Sort by timestamp (latest first) and return the latest directory
+    latest_run = sorted(valid_dirs, key=lambda x: x[0], reverse=True)[0][1]
+    logging.info(f"Latest run directory: {latest_run}")
+
+    return latest_run
 
 
 def process_training(project_name, entity_name, experiment_name, version, group, use_existing_model, sleap_train_command, tags=None, model_tags=None):
@@ -386,11 +424,13 @@ def process_training(project_name, entity_name, experiment_name, version, group,
         # Execute training command with the modified config
         command = sleap_train_command.format(modified_config_path.as_posix())
         logging.info(f"Executing training command: {command}")
-
         execute_training(command)
 
-        # Log model and evaluation results
-        model_dir = dir_path / "models"
+        # Find latest run directory
+        models_dir = dir_path / "models"
+        model_dir = get_latest_run(models_dir)
+
+        # Log model artifact with evaluations
         if model_dir.exists():
             log_model_artifact_with_evals(run, experiment_name, model_tags, model_dir, version, evaluate_model_and_generate_visuals, {"model_dir": model_dir, "px_per_mm": 17.0})
         else:
