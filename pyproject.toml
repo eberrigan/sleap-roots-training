@@ -1,0 +1,48 @@
+[project]
+name = "sleap-roots-training"
+version = "0.0.1a0"
+authors = [
+    { name = "Elizabeth Berrigan", email = "eberrigan@salk.edu" },
+]
+description = "Wrapper around SLEAP and WandB for training."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.7"
+dependencies = [
+    "sleap",
+    "wandb",
+    "jupyterlab",
+    "ipywidgets",
+    "matplotlib",
+    "seaborn",
+]
+keywords = [
+    "sleap",
+    "training",
+    "wandb",
+    "logging",
+    "evaluation",
+    "model-management",
+    "dataset-management",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+]
+
+[project.optional-dependencies]
+dev = ["toml", "twine", "build", "pytest", "black"]
+
+[project.urls]
+Homepage = "https://github.com/eberrigan/sleap-roots-training"
+Issues = "https://github.com/eberrigan/sleap-roots-training/issues"
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = [""]
+include = ["sleap_roots_training*"]
+exclude = ["helper_functions", "tests", "helper_functions.*", "tests.*"]
