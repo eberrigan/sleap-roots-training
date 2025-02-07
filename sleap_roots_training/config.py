@@ -5,12 +5,13 @@ from typing import Dict, Any, List
 # Define the path to the config file
 CONFIG_PATH = Path(__file__).parent / "config.yaml"
 
-# Default configuration dictionary
+# Default configuration dictionary for a wandb run
 DEFAULT_CONFIG: Dict[str, Any] = {
     "project_name": "sleap-roots",
     "entity_name": "eberrigan-salk-institute-for-biological-studies",
-    "experiment_name": "test_run_v1",
-    "registry": "sleap-roots-models",
+    "experiment_name": None,
+    "registry": None,
+    "job_type": None,
 }
 
 
