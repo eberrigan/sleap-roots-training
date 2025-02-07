@@ -192,3 +192,4 @@ prediction_viz/
 
 # don't add SLEAP data to git
 *.slp
+predictions/
