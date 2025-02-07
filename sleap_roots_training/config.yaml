@@ -1,6 +1,6 @@
-collection_name: sorghum-soybean-primary-2025-01-07-hp-sweep-2025-02-07
+collection_name: null
 entity_name: eberrigan-salk-institute-for-biological-studies
-experiment_name: sorghum-soybean-primary-2025-01-07-hp-sweep-2025-02-07
-job_type: sweep
+experiment_name: sorghum-primary-2025-01-06_eval_2025-01-29
+job_type: null
 project_name: sleap-roots
 registry: sleap-roots-models
