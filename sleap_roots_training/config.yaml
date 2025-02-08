@@ -1,6 +1,6 @@
-collection_name: sorghum_5-12DAG_primary_6nodes_labels
+collection_name: null
 entity_name: eberrigan-salk-institute-for-biological-studies
-experiment_name: sorghum_5-12DAG_primary_6nodes_labels_2025-02-06
-job_type: build_dataset
+experiment_name: sorghum-primary-2025-01-06_eval_2025-01-29
+job_type: null
 project_name: sleap-roots
-registry: sleap-roots-labels
+registry: sleap-roots-models
