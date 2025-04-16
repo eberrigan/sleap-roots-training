@@ -401,10 +401,28 @@ def process_training(project_name, entity_name, experiment_name, version, group,
         tags=tags
     )
 
+    if use_existing_model:
+        # Find latest run directory
+        models_dir = dir_path / "models"
+        model_dir = get_latest_run(models_dir)
+
+        if model_dir:
+            # Log existing model artifact with evaluations
+            log_model_artifact_with_evals(run, experiment_name, model_tags, model_dir, version, evaluate_model_and_generate_visuals, {"model_dir": model_dir, "px_per_mm": 17.0})
+            run.finish()
+            logging.info(f"W&B run for version {version} finished.")
+            return
+        else:
+            logging.error(f"No existing model found for version {version}.")
+            run.finish()
+            raise FileNotFoundError(f"No existing model found for version {version}.")
+            
+
     # Create a copy to modify (avoid modifying the original)
     config = json.loads(json.dumps(original_config))  # Deep copy
 
     # Update configuration dynamically from W&B (without modifying the original)
+    # Allows for dynamic parameter changes during sweeps
     config = update_config_with_wandb(config)
 
     # Generate a unique timestamp for this modified config
