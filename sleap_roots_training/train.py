@@ -323,7 +323,7 @@ def update_config_with_wandb(config:dict) -> dict:
     return config
 
 
-def get_latest_run(models_dir: Path) -> Path:
+def get_latest_run(models_dir: Path) ->  Optional[Path]:
     """Gets the latest run directory from the models folder based on timestamp.
 
     Args:
