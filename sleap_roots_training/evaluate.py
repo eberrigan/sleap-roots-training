@@ -4,10 +4,11 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import sleap
 import numpy as np
+import datetime
 
 from matplotlib.patches import ConnectionPatch
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from wandb.sdk.wandb_run import Run
 from wandb.sdk.artifacts.artifact import Artifact
 
