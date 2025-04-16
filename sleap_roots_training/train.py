@@ -435,8 +435,8 @@ def process_training(project_name, entity_name, experiment_name, version, group,
 
     logging.info(f"Saved updated configuration to: {modified_config_path}")
 
-    # Update wandb.config with the path to the modified config
-    wandb.config.update({"config_path": modified_config_path.as_posix()}, allow_val_change=True)
+    # Update wandb.config with the full updated config, including the file path
+    wandb.config.update({**config, "config_path": modified_config_path.as_posix()}, allow_val_change=True)
 
     logging.info(f"Training with updated config for version {version}.")
 
