@@ -465,6 +465,25 @@ def process_training(project_name, entity_name, experiment_name, version, group,
         logging.info(f"W&B run for version {version} finished.")
 
 
+def get_param_combinations(sweep_config: Dict) -> Optional[int]:
+    """Calculate the number of parameter combinations for a grid search sweep.
+
+    Args:
+        sweep_config (dict): The sweep configuration dictionary.
+
+    Returns:
+        int: The total number of parameter combinations or None if not applicable.
+    """
+    if sweep_config.get("method") == "grid":
+        params = sweep_config.get("parameters", {})
+        # Debug log to show parameter values
+        logging.debug(f"Parameters for grid sweep: {params}")
+        for param, details in params.items():
+            logging.debug(f"Parameter: {param}, Values: {details.get('values', [])}, Count: {len(details.get('values', []))}")
+        return reduce(operator.mul, [len(param.get("values", [])) for param in params.values()], 1)
+    return None  # For random or bayesian sweeps, count isn't predetermined
+
+
 def main(
     csv_path: str,
     tags: Optional[List[str]] = None,
@@ -472,7 +491,10 @@ def main(
     sleap_train_command: str = "sleap-train {}",
     use_existing_model: bool = False,
     use_sweep: bool = False,
-    sweep_config: Optional[Dict] = None
+    sweep_config: Optional[Dict] = None,
+    base_dir_override: Optional[str] = None,
+    link_to_registry: bool = False,
+    artifact_name_prefix: Optional[str] = None,
 ):
     """Main function to process all training runs.
 
