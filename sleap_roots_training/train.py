@@ -506,8 +506,10 @@ def main(
         use_existing_model (bool, optional): Whether to use an existing model for evaluation.
         use_sweep (bool, optional): Whether to run a W&B sweep instead of a single run.
         sweep_config (Dict, optional): W&B sweep configuration dictionary.
+        base_dir_override (str, optional): Base directory to override what is specified in the CSV.
+        link_to_registry (bool, optional): Whether to link each model to the model registry.
+        artifact_name_prefix (str, optional): Prefix to use when naming model artifacts.
     """
-
     try:
         # Set defaults if None
         tags = tags or []
@@ -517,6 +519,7 @@ def main(
         PROJECT_NAME = CONFIG["project_name"]
         ENTITY_NAME = CONFIG["entity_name"]
         EXPERIMENT_NAME = CONFIG["experiment_name"]
+        REGISTRY_NAME = CONFIG["registry"] if link_to_registry else None
 
         logging.info(f"Starting main function with CSV: {csv_path}")
 
@@ -524,15 +527,34 @@ def main(
         df = load_training_data(csv_path)
         grouped = get_training_groups(df)
 
-        def train():
-            """Function that W&B Sweep Agent calls to run each training run."""
-            try:
-                for version, group in grouped:
+        logging.info(f"Detected {len(grouped)} train-test splits.")
 
+        for version, group in grouped:  # Now iterate over train-test splits FIRST
+            logging.info(f"Processing train-test split version: {version}")
+
+            if base_dir_override:
+                base_path = Path(base_dir_override)
+                logging.info(f"Rebasing paths for version {version} using base_dir_override: {base_path}")
+                group = group.copy()
+                group["path"] = group["path"].apply(
+                    lambda p: (base_path / Path(p).parent.name / Path(p).name).as_posix()
+                )
+                logging.info(f"Updated paths for version {version}: {group['path'].tolist()}")
+
+            # Use custom run/experiment name if prefix is provided
+            if artifact_name_prefix:
+                experiment_run_name = f"{artifact_name_prefix}"
+            else:
+                experiment_run_name = f"{EXPERIMENT_NAME}"
+
+            def train():
+                """Train function executed per sweep agent for a single train-test split."""
+                try:
+                    logging.info(f"Starting training for version {version}...")
                     process_training(
                         project_name=PROJECT_NAME,
                         entity_name=ENTITY_NAME,
-                        experiment_name=EXPERIMENT_NAME,
+                        experiment_name=experiment_run_name,
                         version=version,
                         group=group,
                         use_existing_model=use_existing_model,
@@ -540,35 +562,59 @@ def main(
                         tags=tags,
                         model_tags=model_tags
                     )
-            except Exception as e:
-                logging.error(f"Error during training execution: {str(e)}", exc_info=True)
-                raise
+                    logging.info(f"Completed training for version {version}.")
 
-        if use_sweep:
-            if not sweep_config:
-                logging.error("Sweep config must be provided when use_sweep=True.")
-                raise ValueError("Sweep config must be provided when use_sweep=True.")
+                except Exception as e:
+                    logging.error(f"Error during training execution for version {version}: {str(e)}", exc_info=True)
+                    raise
 
-            logging.info("Creating W&B sweep...")
-            sweep_id = wandb.sweep(sweep_config, project=PROJECT_NAME)
-            logging.info(f"Sweep created with ID: {sweep_id}")
+            if use_sweep:
+                if not sweep_config:
+                    logging.error("Sweep config must be provided when use_sweep=True.")
+                    raise ValueError("Sweep config must be provided when use_sweep=True.")
 
-            # Dynamically determine `count` (total parameter combinations)
-            param_combinations = 1
-            for param in sweep_config["parameters"].values():
-                param_combinations *= len(param["values"])  # Multiply all parameter choices
+                logging.info(f"Creating W&B sweep for version {version}...")
+                
+                # Ensure unique sweep ID per train-test split
+                sweep_id = wandb.sweep(sweep_config, project=PROJECT_NAME)
+                logging.info(f"Sweep created for version {version} with ID: {sweep_id}")
 
-            logging.info(f"Running W&B sweep with {param_combinations} experiments...")
-            wandb.agent(sweep_id, function=train, count=param_combinations)
+                param_combinations = get_param_combinations(sweep_config)
+                if param_combinations:
+                    logging.info(f"Running W&B grid sweep with {param_combinations} experiments for version {version}...")
+                else:
+                    logging.info("Running W&B sweep with an undetermined number of experiments (random or bayes).")
 
-        else:
-            logging.info("Running single training...")
-            train()
+                # Run the sweep agent ONLY for this train-test split
+                wandb.agent(sweep_id, function=train, count=param_combinations)
+                logging.info(f"Finished sweep for version {version}.")
+
+            else:
+                logging.info(f"Running single training for version {version}...")
+                train()
+
+            if link_to_registry and REGISTRY_NAME:
+                prefix = artifact_name_prefix or EXPERIMENT_NAME
+                artifact_name = f"{prefix}_v00{version}"
+                collection_name = artifact_name
+                try:
+                    fetch_model_artifact_and_link_to_registry(
+                        project_name=PROJECT_NAME,
+                        entity_name=ENTITY_NAME,
+                        artifact_name=artifact_name,
+                        registry_name=REGISTRY_NAME,
+                        collection_name=collection_name,
+                        wandb_version="latest"
+                    )
+                    logging.info(f"Linked artifact {artifact_name} to registry {REGISTRY_NAME}/{collection_name}.")
+                except Exception as e:
+                    logging.error(f"Failed to link artifact {artifact_name} to registry: {e}", exc_info=True)
 
         logging.info("All versions processed successfully.")
 
     except Exception as e:
         logging.error(f"Fatal error in main function: {str(e)}", exc_info=True)
+
 
 
 
