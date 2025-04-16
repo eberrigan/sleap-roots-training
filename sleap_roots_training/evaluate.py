@@ -4,10 +4,11 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import sleap
 import numpy as np
+import datetime
 
 from matplotlib.patches import ConnectionPatch
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from wandb.sdk.wandb_run import Run
 from wandb.sdk.artifacts.artifact import Artifact
 
@@ -169,111 +170,238 @@ def predictions_viz(output_dir: str, filename: str, groups:List[str], frame_idx:
 
 
 def predictions_viz_multiple_files(
-    output_dir: str, filenames: list, groups: List[str], frame_idx: int = 1, model_version: str = "002", overwrite=False
-    ):
-        """Visualize predictions for multiple files and models in a grid.
+    output_dir: str, filenames: list, groups: List[str], tags: List[str], frame_idx: int = 1, model_version: str = "002",
+    overwrite=False, figsize_scale: float = 5, dpi: int = 300, transparent: bool = False,
+    font_settings: dict = None, colormap: str = "magma", spacing: dict = None
+) -> None:
+    """Visualize predictions for multiple files and models in a grid with customizable settings.
 
-        Args:
-            output_dir (str): Path to save outputs.
-            filenames (list): List of video file paths for predictions.
-            groups (List[str]): List of group names to fetch model artifacts from.
-            frame_idx (int): Frame index for visualization. Default is 1.
-            model_version (str): Model version to fetch from the registry. Default is "002".
-            overwrite (bool): Whether to overwrite existing predictions. Default is False.
+    Args:
+        output_dir (str): Path to save outputs.
+        filenames (list): List of video file paths for predictions.
+        groups (List[str]): List of group names to fetch model artifacts from.
+        frame_idx (int): Frame index for visualization. Default is 1.
+        model_version (str): Model version to fetch from the registry. Default is "002".
+        overwrite (bool): Whether to overwrite existing predictions. Default is False.
+        figsize_scale (float): Scale factor for figure size. Default is 5.
+        dpi (int): Resolution for saved figure. Default is 300.
+        transparent (bool): Whether to save figure with a transparent background. Default is False.
+        font_settings (dict): Custom font settings (e.g., font sizes for labels, title).
+        colormap (str): Colormap for visualization. Default is "magma".
+        spacing (dict): Adjust subplot spacing (wspace, hspace, left, right, top, bottom).
+    
+    Returns:
+        None
+    """
+    PROJECT_NAME = CONFIG["project_name"]
+    ENTITY_NAME = CONFIG["entity_name"]
+    EXPERIMENT_NAME = CONFIG["experiment_name"]
+    REGISTRY = CONFIG["registry"]
 
-        Returns:
-            None
-        """
-        PROJECT_NAME = CONFIG["project_name"]
-        ENTITY_NAME = CONFIG["entity_name"]
-        EXPERIMENT_NAME = CONFIG["experiment_name"]
-        REGISTRY = CONFIG["registry"]
+    # Initialize W&B run
+    run = wandb.init(
+        project=PROJECT_NAME,
+        entity=ENTITY_NAME,
+        name=EXPERIMENT_NAME,
+        job_type="predictions_viz_multiple",
+        tags=tags,
+        group=EXPERIMENT_NAME
+    )
 
-        # Initialize W&B run
-        run = wandb.init(
-            project=PROJECT_NAME,
-            entity=ENTITY_NAME,
-            name=EXPERIMENT_NAME,
-            job_type="predictions_viz_multiple",
-            tags=groups, # Add group names as tags
-            group=EXPERIMENT_NAME
-        )
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
+    num_files = len(filenames)
+    num_models = len(groups)
+    fig, axes = plt.subplots(num_files, num_models, figsize=(figsize_scale * num_models, figsize_scale * num_files))
 
-        num_files = len(filenames)
-        num_models = len(groups)
-        fig, axes = plt.subplots(num_files, num_models, figsize=(5 * num_models, 5 * num_files))
+    # Set figure transparency if required
+    if transparent:
+        fig.patch.set_alpha(0)
 
-        for file_idx, filename in enumerate(filenames):
-            if not Path(filename).exists():
-                print(f"File not found: {filename}")
+    # Apply font settings if provided
+    if font_settings:
+        plt.rcParams.update(font_settings)
+
+    # Set colormap
+    plt.set_cmap(colormap)
+
+    for file_idx, filename in enumerate(filenames):
+        if not Path(filename).exists():
+            print(f"File not found: {filename}")
+            continue
+
+        for model_idx, group in enumerate(groups):
+            artifact_name = create_artifact_name(group, model_version)
+            try:
+                artifact = fetch_model_artifact(
+                    run=run, entity_name=ENTITY_NAME, registry=REGISTRY, artifact_name=artifact_name, alias="latest"
+                )
+                artifact_dir = artifact.download(skip_cache=False)
+                print(f"Downloaded artifact: {artifact_name} to {artifact_dir}")
+            except Exception as e:
+                print(f"Error fetching artifact: {artifact_name}. Exception: {e}")
                 continue
 
-            for model_idx, group in enumerate(groups):
-                artifact_name = create_artifact_name(group, model_version)
+            if artifact_dir:
                 try:
-                    artifact = fetch_model_artifact(
-                        run=run,
-                        entity_name=ENTITY_NAME,
-                        registry=REGISTRY,
-                        artifact_name=artifact_name,
-                        alias="latest"
-                    )
-                    artifact_dir = artifact.download(skip_cache=False)
-                    print(f"Downloaded artifact: {artifact_name} to {artifact_dir}")
+                    predictions = get_predictions(filename, model_path=artifact_dir, overwrite=overwrite)
+                    labeled_frame = predictions[frame_idx]
+
+                    # Custom visualization in the grid
+                    ax = axes[file_idx, model_idx]
+                    plot_custom_img(ax, labeled_frame.image)
+                    plot_custom_instances(ax, labeled_frame.instances, lw=2, ms=50)
+
+                    if model_idx == 0:
+                        # Add filename label on the left side for each row
+                        fig.text(
+                            x=-0.01,  # Position outside the grid
+                            y=(num_files - file_idx - 0.5) / num_files,  # Center vertically in the row
+                            s=Path(filename).stem,  # Filename without extension
+                            ha="right",
+                            va="center",
+                            fontsize=font_settings.get("text_fontsize", 12) if font_settings else 12,
+                            rotation=0,
+                        )
+
+                    # Add artifact name label at the bottom for each column
+                    if file_idx == 0:
+                        fig.text(
+                            x=(model_idx + 0.5) / num_models,
+                            y=-0.05,
+                            s=artifact_name,
+                            ha="right",
+                            va="center",
+                            fontsize=font_settings.get("text_fontsize", 12) if font_settings else 12,
+                            rotation=45,
+                        )
+
                 except Exception as e:
-                    print(f"Error fetching artifact: {artifact_name}. Exception: {e}")
+                    print(f"Error processing artifact: {artifact_name}. Exception: {e}")
+
+    # Apply custom spacing if provided
+    spacing_defaults = {
+        "left": 0.01, "right": 0.95, "top": 0.95, "bottom": 0.01, "wspace": 0.1, "hspace": 0.1
+    }
+    spacing = spacing or spacing_defaults
+    plt.subplots_adjust(**spacing)
+
+    # Save the figure with customizable settings
+    plt.savefig(
+        Path(output_dir) / f"grid_predictions_frame_{frame_idx}.png",
+        bbox_inches='tight', dpi=dpi, transparent=transparent
+    )
+    print(f"Saved grid visualization to {output_dir}/grid_predictions_frame_{frame_idx}.png")
+
+    plt.show()
+    plt.close()
+    run.finish()
+
+
+def predictions_viz_from_sleap_files(
+    prediction_files_grid: List[List[Path]],
+    test_group_names: List[str],
+    model_names: List[str],
+    output_path: Path,
+    frame_idx: int = 1,
+    figsize_scale: float = 5,
+    dpi: int = 300,
+    transparent: bool = False,
+    font_settings: dict = None,
+    colormap: str = "magma",
+    spacing: dict = None
+):
+    """
+    Visualize predictions from multiple models on multiple test groups in a grid.
+
+    Each row shows predictions from one model across all test groups.
+    Each column is a test group. Cell (i, j) = model[i] on group[j].
+
+    Args:
+        prediction_files_grid (List[List[Path]]): 2D list [num_models][num_groups] of prediction `.slp` files.
+        test_group_names (List[str]): Names of test groups (1 per column).
+        model_names (List[str]): Names of models (1 per row).
+        output_path (Path): Path to save the output figure.
+        frame_idx (int): Frame index to display from each file.
+        figsize_scale (float): Size multiplier for layout.
+        dpi (int): Output resolution.
+        transparent (bool): Save with transparent background.
+        font_settings (dict): Optional font settings.
+        colormap (str): Matplotlib colormap.
+        spacing (dict): Subplot spacing.
+    """
+    output_path = Path(output_path)
+    
+    num_models = len(prediction_files_grid)
+    num_groups = len(test_group_names)
+
+    fig, axes = plt.subplots(
+        num_models, num_groups,
+        figsize=(figsize_scale * num_groups, figsize_scale * num_models)
+    )
+
+    if transparent:
+        fig.patch.set_alpha(0)
+
+    if font_settings:
+        plt.rcParams.update(font_settings)
+
+    plt.set_cmap(colormap)
+
+    # If grid is 1 row or 1 col, make axes indexable
+    if num_models == 1:
+        axes = [axes]
+    if num_groups == 1:
+        axes = [[ax] for ax in axes]
+
+    for row_idx, (model_name, row_files) in enumerate(zip(model_names, prediction_files_grid)):
+        for col_idx, (group_name, slp_path) in enumerate(zip(test_group_names, row_files)):
+            ax = axes[row_idx][col_idx]
+            try:
+                labels = sleap.load_file(slp_path)
+                if labels is None:
+                    print(f"No labels in {slp_path}")
+                    continue
+                if frame_idx >= len(labels):
+                    print(f"Frame {frame_idx} out of range in {slp_path.name}")
                     continue
 
-                if artifact_dir:
-                    try:
-                        predictions = get_predictions(filename, model_path=artifact_dir, overwrite=overwrite)
-                        labeled_frame = predictions[frame_idx]
+                labeled_frame = labels[frame_idx]
+                plot_custom_img(ax, labeled_frame.image)
+                plot_custom_instances(ax, labeled_frame.instances, lw=2, ms=50)
 
-                        # Custom visualization in the grid
-                        ax = axes[file_idx, model_idx]
-                        plot_custom_img(ax, labeled_frame.image)
-                        plot_custom_instances(ax, labeled_frame.instances, lw=2, ms=50)
+                # Column label: group name (bottom row only)
+                if row_idx == 0:
+                    fig.text(
+                        x=(col_idx + 0.5) / num_groups,
+                        y=0.00,
+                        s=group_name,
+                        ha="right", va="center",
+                        fontsize=font_settings.get("text_fontsize", 12) if font_settings else 12
+                    )
 
-                        if model_idx == 0:
-                            # Add filename label on the left side for each row
-                            fig.text(
-                                x=-0.01,  # Position outside the grid
-                                y=(num_files - file_idx - 0.5) / num_files, # Center vertically in the row
-                                s=Path(filename).stem,  # Filename without extension
-                                ha="right",
-                                va="center",
-                                fontsize=12,
-                                rotation=0,
-                            )
+                # Row label: model name (left col only)
+                if col_idx == 0:
+                    fig.text(
+                        x=-0.01,
+                        y=(num_models - row_idx - 0.5) / num_models,
+                        s=model_name,
+                        ha="right", va="center",
+                        fontsize=font_settings.get("text_fontsize", 12) if font_settings else 12
+                    )
 
-                        # Add artifact name label at the bottom for each column
-                        if file_idx == 0:  # Only add artifact name once per column
-                            fig.text(
-                                x=(model_idx + 0.5) / num_models,  # Center horizontally in the column
-                                y=-0.05,  # Slightly below the grid
-                                s=artifact_name,  # Artifact name
-                                ha="right", # Center horizontally
-                                va="center",# Center vertically
-                                fontsize=12,  # Font size for visibility
-                                rotation=45,  # Angled for readability
-                                )
+            except Exception as e:
+                print(f"Error loading/plotting {slp_path} (model: {model_name}, group: {group_name}): {e}")
 
-                    except Exception as e:
-                        print(f"Error processing artifact: {artifact_name}. Exception: {e}")
+    # Apply subplot spacing
+    spacing_defaults = {"left": 0.01, "right": 0.95, "top": 0.95, "bottom": 0.05, "wspace": 0.15, "hspace": 0.1}
+    spacing = spacing or spacing_defaults
+    plt.subplots_adjust(**spacing)
 
-        plt.subplots_adjust(left=0.00, # Adjust left margin
-                            right=1.0, # Adjust right margin
-                            top=1.00, # Adjust top margin
-                            bottom=0.00, # Adjust bottom margin
-                            wspace=0.00, # Adjust width space between subplots
-                            hspace=0.00) # Adjust height space between subplots
-        plt.savefig(Path(output_dir) / f"grid_predictions_frame_{frame_idx}.png", bbox_inches='tight', dpi=300) # Save the figure with tight bounding box
-        print(f"Saved grid visualization to {output_dir}/grid_predictions_frame_{frame_idx}.png")
-        plt.show()  # Show the plot
-        plt.close()
-        run.finish()
+    plt.savefig(output_path, dpi=dpi, bbox_inches="tight", transparent=transparent)
+    print(f"Saved SLEAP grid visualization to {output_path}")
+    plt.show()
+    plt.close()
 
 
 def plot_custom_img(ax, img: np.ndarray):
@@ -325,7 +453,8 @@ def evaluate_model(model_artifact_name: str, test_artifact_name: str, output_dir
 
     Returns:
         sleap.Labels: The predicted labels.
-        dict: The evaluation metrics.
+        dict: The evaluation metrics (without changing units).
+        metrics_summary: Dictionary containing the summary metrics (units in mm).
     """
     PROJECT_NAME = CONFIG["project_name"]
     ENTITY_NAME = CONFIG["entity_name"]
@@ -380,7 +509,6 @@ def evaluate_model(model_artifact_name: str, test_artifact_name: str, output_dir
             labels_gt=test_data,
             model=model,
             save=False, # Do not save the predictions in the models directory
-
             )
 
         # Save predictions
@@ -402,6 +530,8 @@ def evaluate_model(model_artifact_name: str, test_artifact_name: str, output_dir
         metrics_summary = {
             "model_path": model_dir,
             "model_name":Path(model_dir).name,
+            "test_path": test_artifact.download(skip_cache=True),
+            "test_set_name": test_artifact_name,
             "dist_p50": metrics["dist.p50"] / px_per_mm,
             "dist_p90": metrics["dist.p90"] / px_per_mm,
             "dist_p95": metrics["dist.p95"] / px_per_mm,
@@ -480,7 +610,7 @@ def evaluate_model(model_artifact_name: str, test_artifact_name: str, output_dir
         run.log_artifact(distances_artifact, type="metrics")
         run.log_artifact(histogram_artifact, type="metrics")
 
-        return labels_pr, metrics
+        return labels_pr, metrics, metrics_summary
 
     except Exception as e:
         print(f"Error during model evaluation: {e}. Skipping this model...")
@@ -493,12 +623,14 @@ def evaluate_model(model_artifact_name: str, test_artifact_name: str, output_dir
         run.finish()
 
 
-def main(groups: List[str], versions: List[str], csv_path: str="metrics.csv"):
+def main(groups: List[str], versions: List[str], tags: Optional[List[str]], metrics_artifact_name: str="summary_metrics", csv_path: str="metrics.csv"):
     """Main function to fetch model artifacts and save metrics to CSV.
 
     Args:
         groups (List[str]): List of group names to fetch artifacts from.
         versions (List[str]): List of train/test split versions to fetch for each group.
+        tags (Optional[List[str]]): List of tags to add to the W&B run.
+        metrics_artifact_name (str): Name of the artifact to save metrics. Default is "summary_metrics".
         csv_path (str): Path to save the CSV file. Default is "metrics.csv".
 
     Returns:
@@ -514,7 +646,7 @@ def main(groups: List[str], versions: List[str], csv_path: str="metrics.csv"):
                      entity=ENTITY_NAME, 
                      name=EXPERIMENT_NAME, 
                      job_type="fetch_metrics", 
-                     tags=groups, 
+                     tags=tags, 
                      group=EXPERIMENT_NAME
                      )
 
@@ -547,7 +679,7 @@ def main(groups: List[str], versions: List[str], csv_path: str="metrics.csv"):
 
         # Create the artifact
         artifact = wandb.Artifact(
-            name="summary_metrics",
+            name=metrics_artifact_name,
             type="metrics",
             metadata=metrics_dict
         )

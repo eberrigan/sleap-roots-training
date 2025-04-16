@@ -1,6 +1,6 @@
 import yaml
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 # Define the path to the config file
 CONFIG_PATH = Path(__file__).parent / "config.yaml"
@@ -11,6 +11,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "entity_name": "eberrigan-salk-institute-for-biological-studies",
     "experiment_name": None,
     "registry": None,
+    "collection_name": None,
     "job_type": None,
 }
 
@@ -77,4 +78,5 @@ CONFIG = load_config()
 PROJECT_NAME: str = CONFIG["project_name"]
 ENTITY_NAME: str = CONFIG["entity_name"]
 EXPERIMENT_NAME: str = CONFIG["experiment_name"]
-REGISTRY: str = CONFIG["registry"]
+REGISTRY: Optional[str] = CONFIG["registry"]
+COLLECTION_NAME: Optional[str] = CONFIG["collection_name"]

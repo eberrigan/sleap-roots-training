@@ -7,8 +7,20 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import sleap
 import numpy as np
+import logging
+import re
+import operator
 
+from typing import List, Optional, Dict
 from pathlib import Path
+from datetime import datetime
+from functools import reduce
+
+from sleap_roots_training.config import CONFIG
+from sleap_roots_training.models import fetch_model_artifact_and_link_to_registry
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
 
 def load_training_data(csv_path):
@@ -281,6 +293,73 @@ def log_model_artifact_with_evals(run, experiment_name, model_tags, model_dir, v
     print(f"Model artifact '{model_artifact.name}' logged to W&B with evaluations.")
 
 
+def update_config_with_wandb(config:dict) -> dict:
+    """Updates the configuration dictionary with values from wandb.config dynamically.
+
+    Args:
+        config (dict): The existing training configuration.
+
+    Returns:
+        dict: Updated configuration with W&B parameters.
+    """
+    if wandb.config:
+        logging.info("Updating configuration with W&B parameters.")
+
+        # Extract only parameters that exist in `wandb.config`
+        wandb_sweep_params = dict(wandb.config)
+
+        logging.info("Original Parameters: %s", json.dumps(wandb_sweep_params, indent=4))
+
+        for key, value in wandb_sweep_params.items():
+            keys = key.split(".")  # Convert "data.preprocessing.input_scaling" to ["data", "preprocessing", "input_scaling"]
+
+            # Traverse the dictionary and set the value
+            temp = config
+            for subkey in keys[:-1]:  # Navigate to the correct nested level
+                temp = temp.setdefault(subkey, {})  # Ensure intermediate dictionaries exist
+            temp[keys[-1]] = value  # Set the final parameter
+
+            logging.info(f"Updated parameter: {key} -> {value}")
+
+        logging.info("Final updated configuration:\n%s", json.dumps(config, indent=4))
+
+    return config
+
+
+def get_latest_run(models_dir: Path) ->  Optional[Path]:
+    """Gets the latest run directory from the models folder based on timestamp.
+
+    Args:
+        models_dir (Path): Path to the models directory.
+
+    Returns:
+        Path: The latest run directory path, or None if no valid directories exist.
+    """
+    if not models_dir.exists() or not models_dir.is_dir():
+        raise FileNotFoundError(f"Models directory not found: {models_dir}")
+
+    # Regex pattern to extract timestamp from the directory name
+    pattern = re.compile(r"(\d{6}_\d{6})")
+
+    # List all valid directories that match the timestamp pattern
+    valid_dirs = []
+    for dir_path in models_dir.iterdir():
+        if dir_path.is_dir():
+            match = pattern.search(dir_path.name)
+            if match:
+                valid_dirs.append((match.group(1), dir_path))  # Store timestamp and full path
+
+    if not valid_dirs:
+        logging.error("No valid directories found in models folder.")
+        return None  # No valid directories found
+
+    # Sort by timestamp (latest first) and return the latest directory
+    latest_run = sorted(valid_dirs, key=lambda x: x[0], reverse=True)[0][1]
+    logging.info(f"Latest run directory: {latest_run}")
+
+    return latest_run
+
+
 def process_training(project_name, entity_name, experiment_name, version, group, use_existing_model, sleap_train_command, tags=None, model_tags=None):
     """Processes a training run for a specific version.
 
@@ -299,114 +378,243 @@ def process_training(project_name, entity_name, experiment_name, version, group,
         None
     """
     dir_path = Path(group.iloc[0]["path"]).parent
-    print(f"Directory path for version {version}: {dir_path}")
+    logging.info(f"Directory path for version {version}: {dir_path}")
 
     config_path = dir_path / f"initial_config_modified_v00{version}.json"
 
-    if config_path.exists():
-        # Load the training configuration
-        with open(config_path, "r") as f:
-            config = json.load(f)
-
-        # Start W&B run
-        run = log_to_wandb(
-            project_name=project_name,
-            entity_name=entity_name,
-            experiment_name=experiment_name,
-            version=version,
-            config=config,
-            config_path=config_path,
-            tags=tags
-        )
-        if use_existing_model:
-            # Check if the model directory exists
-            model_dir = dir_path / "models"
-            if model_dir.exists() and model_dir.is_dir():
-                # Get all subdirectories in the models directory
-                subdirectories = [subdir for subdir in model_dir.iterdir() if subdir.is_dir()]
-
-                if len(subdirectories) == 1:
-                    # If exactly one subdirectory exists, get its name
-                    subdirectory_name = subdirectories[0].name
-                    print(f"Subdirectory name: {subdirectory_name}")
-
-                    # Construct the path to the model directory for this run
-                    model_dir = model_dir / subdirectory_name
-                    print(f"Model directory path: {model_dir}")
-
-                    # Log the model as a W&B artifact with evaluation metrics and visualizations
-                    log_model_artifact_with_evals(run, experiment_name, model_tags, model_dir, version, evaluate_model_and_generate_visuals, {"model_dir": model_dir, "px_per_mm": 17.0})
-
-                elif len(subdirectories) == 0:
-                    raise FileNotFoundError(f"No subdirectories found in the models directory for version {version}: {model_dir}")
-                else:
-                    raise ValueError(f"More than one subdirectory found in the models directory for version {version}: {subdirectories}")
-            else:
-                raise FileNotFoundError(f"Models directory does not exist for version {version}: {model_dir}")
-        else:
-            try:
-                # Execute training command
-                command = sleap_train_command.format(config_path.as_posix())
-                # Debugging: Print the command to verify it is correct
-                print(f"Prepared training command: {command}")
-                
-                execute_training(command)
-
-                model_dir = dir_path / "models"
-
-                # Ensure the models directory exists
-                if model_dir.exists() and model_dir.is_dir():
-                    # Get all subdirectories in the models directory
-                    subdirectories = [subdir for subdir in model_dir.iterdir() if subdir.is_dir()]
-
-                    if len(subdirectories) == 1:
-                        # If exactly one subdirectory exists, get its name
-                        subdirectory_name = subdirectories[0].name
-                        print(f"Subdirectory name: {subdirectory_name}")
-
-                        # Construct the path to the model directory for this run
-                        model_dir = model_dir / subdirectory_name
-                        print(f"Model directory path: {model_dir}")
-
-                        # Log the model with evaluation metrics and visualizations as a W&B artifact
-                        log_model_artifact_with_evals(run, experiment_name, model_tags, model_dir, version, evaluate_model_and_generate_visuals, {"model_dir": model_dir, "px_per_mm": 17.0})
-
-                    elif len(subdirectories) == 0:
-                        raise FileNotFoundError(f"No subdirectories found in the models directory for version {version}: {model_dir}")
-                    else:
-                        raise ValueError(f"More than one subdirectory found in the models directory for version {version}: {subdirectories}")
-                else:
-                    raise FileNotFoundError(f"Models directory does not exist for version {version}: {model_dir}")
-
-            finally:
-                # Ensure the W&B run is finished
-                run.finish()
-                print(f"W&B run for version {version} finished.")
-    else:
+    if not config_path.exists():
+        logging.error(f"Config file not found for version {version}: {config_path}")
         raise FileNotFoundError(f"Config file not found for version {version}: {config_path}")
-    
 
-    def main(csv_path, use_existing_model=False):
-        """Main function to process all training runs.
-        
-        Args:
-            csv_path (Path): Path to the CSV file containing train-test splits paths.
-            use_existing_model (bool, optional): Whether to use an existing model for evaluation.
-        """
+    # Load the original configuration (unchanged)
+    with open(config_path, "r") as f:
+        original_config = json.load(f)
+
+    # Start W&B run
+    run = log_to_wandb(
+        project_name=project_name,
+        entity_name=entity_name,
+        experiment_name=experiment_name,
+        version=version,
+        config=original_config, 
+        config_path=config_path,
+        tags=tags
+    )
+
+    if use_existing_model:
+        # Find latest run directory
+        models_dir = dir_path / "models"
+        model_dir = get_latest_run(models_dir)
+
+        if model_dir:
+            # Log existing model artifact with evaluations
+            log_model_artifact_with_evals(run, experiment_name, model_tags, model_dir, version, evaluate_model_and_generate_visuals, {"model_dir": model_dir, "px_per_mm": 17.0})
+            run.finish()
+            logging.info(f"W&B run for version {version} finished.")
+            return
+        else:
+            logging.error(f"No existing model found for version {version}.")
+            run.finish()
+            raise FileNotFoundError(f"No existing model found for version {version}.")
+            
+
+    # Create a copy to modify (avoid modifying the original)
+    config = json.loads(json.dumps(original_config))  # Deep copy
+
+    # Update configuration dynamically from W&B (without modifying the original)
+    # Allows for dynamic parameter changes during sweeps
+    config = update_config_with_wandb(config)
+
+    # Generate a unique timestamp for this modified config
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    modified_config_path = dir_path / f"modified_config_v00{version}_{timestamp}.json"
+
+    # Save modified config
+    with open(modified_config_path, "w") as f:
+        json.dump(config, f, indent=4)
+
+    logging.info(f"Saved updated configuration to: {modified_config_path}")
+
+    # Update wandb.config with the full updated config, including the file path
+    wandb.config.update({**config, "config_path": modified_config_path.as_posix()}, allow_val_change=True)
+
+    logging.info(f"Training with updated config for version {version}.")
+
+    try:
+        # Execute training command with the modified config
+        command = sleap_train_command.format(modified_config_path.as_posix())
+        logging.info(f"Executing training command: {command}")
+        execute_training(command)
+
+        # Find latest run directory
+        models_dir = dir_path / "models"
+        model_dir = get_latest_run(models_dir)
+
+        # Log model artifact with evaluations
+        if model_dir.exists():
+            log_model_artifact_with_evals(run, experiment_name, model_tags, model_dir, version, evaluate_model_and_generate_visuals, {"model_dir": model_dir, "px_per_mm": 17.0})
+        else:
+            logging.error(f"Model directory does not exist: {model_dir}")
+            raise FileNotFoundError(f"Model directory does not exist: {model_dir}")
+
+    except Exception as e:
+        logging.error(f"Training failed for version {version}: {str(e)}", exc_info=True)
+
+    finally:
+        run.finish()
+        logging.info(f"W&B run for version {version} finished.")
+
+
+def get_param_combinations(sweep_config: Dict) -> Optional[int]:
+    """Calculate the number of parameter combinations for a grid search sweep.
+
+    Args:
+        sweep_config (dict): The sweep configuration dictionary.
+
+    Returns:
+        int: The total number of parameter combinations or None if not applicable.
+    """
+    if sweep_config.get("method") == "grid":
+        params = sweep_config.get("parameters", {})
+        # Debug log to show parameter values
+        logging.debug(f"Parameters for grid sweep: {params}")
+        for param, details in params.items():
+            logging.debug(f"Parameter: {param}, Values: {details.get('values', [])}, Count: {len(details.get('values', []))}")
+        return reduce(operator.mul, [len(param.get("values", [])) for param in params.values()], 1)
+    return None  # For random or bayesian sweeps, count isn't predetermined
+
+
+def main(
+    csv_path: str,
+    tags: Optional[List[str]] = None,
+    model_tags: Optional[List[str]] = None,
+    sleap_train_command: str = "sleap-train {}",
+    use_existing_model: bool = False,
+    use_sweep: bool = False,
+    sweep_config: Optional[Dict] = None,
+    base_dir_override: Optional[str] = None,
+    link_to_registry: bool = False,
+    artifact_name_prefix: Optional[str] = None,
+):
+    """Main function to process all training runs.
+
+    Args:
+        csv_path (str): Path to the CSV file containing train-test splits paths.
+        tags (List[str], optional): List of tags for W&B runs.
+        model_tags (List[str], optional): List of tags for W&B model artifacts.
+        sleap_train_command (str, optional): Command template for running SLEAP training.
+        use_existing_model (bool, optional): Whether to use an existing model for evaluation.
+        use_sweep (bool, optional): Whether to run a W&B sweep instead of a single run.
+        sweep_config (Dict, optional): W&B sweep configuration dictionary.
+        base_dir_override (str, optional): Base directory to override what is specified in the CSV.
+        link_to_registry (bool, optional): Whether to link each model to the model registry.
+        artifact_name_prefix (str, optional): Prefix to use when naming model artifacts.
+    """
+    try:
+        # Set defaults if None
+        tags = tags or []
+        model_tags = model_tags or []
+
+        # Load experiment details from global CONFIG
+        PROJECT_NAME = CONFIG["project_name"]
+        ENTITY_NAME = CONFIG["entity_name"]
+        EXPERIMENT_NAME = CONFIG["experiment_name"]
+        REGISTRY_NAME = CONFIG["registry"] if link_to_registry else None
+
+        logging.info(f"Starting main function with CSV: {csv_path}")
+
+        # Load training data
         df = load_training_data(csv_path)
         grouped = get_training_groups(df)
 
-        for version, group in grouped:
-            print(f"Processing version {version}...")
-            print(f"Group: {group}")
-            process_training(
-                project_name=PROJECT_NAME,
-                entity_name=ENTITY_NAME,
-                experiment_name=EXPERIMENT_NAME,
-                version=version,
-                group=group,
-                use_existing_model=use_existing_model,
-                sleap_train_command=SLEAP_TRAIN_COMMAND,
-                tags=TAGS,
-                model_tags=MODEL_TAGS
-            )
+        logging.info(f"Detected {len(grouped)} train-test splits.")
+
+        for version, group in grouped:  # Now iterate over train-test splits FIRST
+            logging.info(f"Processing train-test split version: {version}")
+
+            if base_dir_override:
+                base_path = Path(base_dir_override)
+                logging.info(f"Rebasing paths for version {version} using base_dir_override: {base_path}")
+                group = group.copy()
+                group["path"] = group["path"].apply(
+                    lambda p: (base_path / Path(p).parent.name / Path(p).name).as_posix()
+                )
+                logging.info(f"Updated paths for version {version}: {group['path'].tolist()}")
+
+            # Use custom run/experiment name if prefix is provided
+            if artifact_name_prefix:
+                experiment_run_name = f"{artifact_name_prefix}"
+            else:
+                experiment_run_name = f"{EXPERIMENT_NAME}"
+
+            def train():
+                """Train function executed per sweep agent for a single train-test split."""
+                try:
+                    logging.info(f"Starting training for version {version}...")
+                    process_training(
+                        project_name=PROJECT_NAME,
+                        entity_name=ENTITY_NAME,
+                        experiment_name=experiment_run_name,
+                        version=version,
+                        group=group,
+                        use_existing_model=use_existing_model,
+                        sleap_train_command=sleap_train_command,
+                        tags=tags,
+                        model_tags=model_tags
+                    )
+                    logging.info(f"Completed training for version {version}.")
+
+                except Exception as e:
+                    logging.error(f"Error during training execution for version {version}: {str(e)}", exc_info=True)
+                    raise
+
+            if use_sweep:
+                if not sweep_config:
+                    logging.error("Sweep config must be provided when use_sweep=True.")
+                    raise ValueError("Sweep config must be provided when use_sweep=True.")
+
+                logging.info(f"Creating W&B sweep for version {version}...")
+                
+                # Ensure unique sweep ID per train-test split
+                sweep_id = wandb.sweep(sweep_config, project=PROJECT_NAME)
+                logging.info(f"Sweep created for version {version} with ID: {sweep_id}")
+
+                param_combinations = get_param_combinations(sweep_config)
+                if param_combinations:
+                    logging.info(f"Running W&B grid sweep with {param_combinations} experiments for version {version}...")
+                else:
+                    logging.info("Running W&B sweep with an undetermined number of experiments (random or bayes).")
+
+                # Run the sweep agent ONLY for this train-test split
+                wandb.agent(sweep_id, function=train, count=param_combinations)
+                logging.info(f"Finished sweep for version {version}.")
+
+            else:
+                logging.info(f"Running single training for version {version}...")
+                train()
+
+            if link_to_registry and REGISTRY_NAME:
+                prefix = artifact_name_prefix or EXPERIMENT_NAME
+                artifact_name = f"{prefix}_v00{version}"
+                collection_name = artifact_name
+                try:
+                    fetch_model_artifact_and_link_to_registry(
+                        project_name=PROJECT_NAME,
+                        entity_name=ENTITY_NAME,
+                        artifact_name=artifact_name,
+                        registry_name=REGISTRY_NAME,
+                        collection_name=collection_name,
+                        wandb_version="latest"
+                    )
+                    logging.info(f"Linked artifact {artifact_name} to registry {REGISTRY_NAME}/{collection_name}.")
+                except Exception as e:
+                    logging.error(f"Failed to link artifact {artifact_name} to registry: {e}", exc_info=True)
+
+        logging.info("All versions processed successfully.")
+
+    except Exception as e:
+        logging.error(f"Fatal error in main function: {str(e)}", exc_info=True)
+
+
+
+

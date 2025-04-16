@@ -193,3 +193,6 @@ prediction_viz/
 # don't add SLEAP data to git
 *.slp
 predictions/
+2025-04-14_generalized_model_eval/
+output/
+poster_results/
