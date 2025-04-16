@@ -291,8 +291,7 @@ def log_model_artifact_with_evals(run, experiment_name, model_tags, model_dir, v
 
 
 def update_config_with_wandb(config:dict) -> dict:
-    """
-    Updates the configuration dictionary with values from wandb.config dynamically.
+    """Updates the configuration dictionary with values from wandb.config dynamically.
 
     Args:
         config (dict): The existing training configuration.
@@ -301,12 +300,12 @@ def update_config_with_wandb(config:dict) -> dict:
         dict: Updated configuration with W&B parameters.
     """
     if wandb.config:
-        logging.info("Updating configuration with W&B sweep parameters.")
+        logging.info("Updating configuration with W&B parameters.")
 
         # Extract only parameters that exist in `wandb.config`
         wandb_sweep_params = dict(wandb.config)
 
-        logging.info("W&B Assigned Parameters: %s", json.dumps(wandb_sweep_params, indent=4))
+        logging.info("Original Parameters: %s", json.dumps(wandb_sweep_params, indent=4))
 
         for key, value in wandb_sweep_params.items():
             keys = key.split(".")  # Convert "data.preprocessing.input_scaling" to ["data", "preprocessing", "input_scaling"]
