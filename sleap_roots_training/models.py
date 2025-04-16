@@ -1,5 +1,6 @@
 import wandb
 import logging
+import re
 
 from pathlib import Path
 from typing import List, Optional
@@ -8,6 +9,23 @@ from sleap_roots_training.config import CONFIG
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
+
+def validate_tags(tags: List[str]):
+    """ Validates tags before logging them to W&B. 
+    
+    Args:
+        tags (List[str]): List of tags to validate.
+    """
+    if not isinstance(tags, list):
+        raise ValueError("Tags should be a list of strings.")
+    for tag in tags:
+        if not isinstance(tag, str):
+            raise ValueError(f"Tag '{tag}' is not a string.")
+        if not re.match(r'^[\w\- ]+$', tag):
+            raise ValueError(
+                f"Invalid W&B tag: '{tag}' — tags must only contain "
+                "alphanumeric characters, hyphens (-), underscores (_), or spaces."
+            )
 
 
 def fetch_model_artifact_from_experiment(project_name, entity_name, artifact_name, wandb_version=None):
