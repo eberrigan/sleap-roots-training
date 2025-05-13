@@ -1,6 +1,6 @@
 collection_name: null
 entity_name: eberrigan-salk-institute-for-biological-studies
-experiment_name: 2025-04-14_generalized_model_eval
-job_type: null
+experiment_name: 2025-04-16_generalizable_model_aug_input_scale
+job_type: train
 project_name: sleap-roots
 registry: sleap-roots-models
