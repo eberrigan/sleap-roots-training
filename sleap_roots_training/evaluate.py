@@ -31,7 +31,7 @@ def create_artifact_name(group: str, version: str) -> str:
     return f"{group}_v{version}"
 
 
-def fetch_model_artifact(run: wandb.run, entity_name: str, registry: str, artifact_name: str, alias: str="latest") -> wandb.Artifact:
+def fetch_model_artifact(run: Run, entity_name: str, registry: str, artifact_name: str, alias: str="latest") -> wandb.Artifact:
     """Return wandb.Artifact object for a given model artifact.
     
     Args:
