@@ -1,6 +1,6 @@
-collection_name: null
+collection_name: 20250529_wheat_seminal_sweep
 entity_name: eberrigan-salk-institute-for-biological-studies
-experiment_name: 2025-04-14_generalized_model_eval
-job_type: null
+experiment_name: 20250529_wheat_seminal_sweep
+job_type: sweep
 project_name: sleap-roots
 registry: sleap-roots-models
