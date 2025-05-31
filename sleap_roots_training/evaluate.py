@@ -440,6 +440,60 @@ def plot_custom_instances(ax, instances, skeleton=None, lw=2, ms=10, cmap=None):
                 ax.add_artist(line)
 
 
+def fetch_sweep_metrics(
+    sweep_ids: List[str],
+    target_metrics: List[str],
+    entity_name: Optional[str] = None,
+    project_name: Optional[str] = None,
+    include_config: bool = True
+) -> pd.DataFrame:
+    """Fetch metrics from all runs in one or more W&B sweeps.
+
+    Args:
+        sweep_ids (List[str]): List of sweep IDs (e.g., ['abc1234', 'def5678']).
+        target_metrics (List[str]): List of metric names to extract.
+        entity_name (Optional[str]): The W&B entity. Defaults to CONFIG.
+        project_name (Optional[str]): The W&B project name. Defaults to CONFIG.
+        include_config (bool): Whether to include run config (e.g., input_scale).
+
+    Returns:
+        pd.DataFrame: DataFrame with one row per run, including metrics and configs.
+    """
+
+    entity = entity_name or CONFIG["entity_name"]
+    project = project_name or CONFIG["project_name"]
+
+    api = wandb.Api()
+    records = []
+
+    for sweep_id in sweep_ids:
+        sweep = api.sweep(f"{entity}/{project}/{sweep_id}")
+
+        for run in sweep.runs:
+            if run.state != "finished":
+                continue  # Skip incomplete runs
+
+            row = {
+                "run_id": run.id,
+                "name": run.name,
+                "group": run.group,
+                "sweep_id": sweep_id,
+            }
+
+            for metric in target_metrics:
+                row[metric] = run.summary.get(metric)
+
+            if include_config:
+                for key, value in run.config.items():
+                    row[f"config/{key}"] = value
+
+            records.append(row)
+
+    df = pd.DataFrame(records)
+    return df
+
+
+
 def evaluate_model(model_artifact_name: str, test_artifact_name: str, output_dir: str="output", px_per_mm=17.0) -> tuple:
     """Evaluate a model artifact against a test dataset.
     
