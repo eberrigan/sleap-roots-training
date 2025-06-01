@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import sleap
 import numpy as np
 import datetime
+import logging
 
 from matplotlib.patches import ConnectionPatch
 from pathlib import Path
@@ -13,6 +14,9 @@ from wandb.sdk.wandb_run import Run
 from wandb.sdk.artifacts.artifact import Artifact
 
 from sleap_roots_training.config import CONFIG
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
 
 def create_artifact_name(group: str, version: str) -> str:
@@ -492,6 +496,39 @@ def fetch_sweep_metrics(
     df = pd.DataFrame(records)
     return df
 
+
+def get_sweep_ids_for_group_from_runs(
+    group_name: str,
+    entity_name: Optional[str] = None,
+    project_name: Optional[str] = None
+) -> List[str]:
+    """Retrieve unique W&B sweep IDs for a given run group by inspecting runs.
+
+    Args:
+        group_name (str): The run group name (shared by runs in a sweep).
+        entity_name (Optional[str]): The W&B entity (defaults to CONFIG).
+        project_name (Optional[str]): The W&B project (defaults to CONFIG).
+
+    Returns:
+        List[str]: Unique sweep IDs associated with the group.
+    """
+
+    entity = entity_name or CONFIG["entity_name"]
+    project = project_name or CONFIG["project_name"]
+
+    api = wandb.Api()
+    runs = api.runs(f"{entity}/{project}", filters={"group": group_name})
+    logging.info(f"Found {len(runs)} runs in group '{group_name}'.")
+    if not runs:
+        logging.warning(f"No runs found for group '{group_name}'. Returning empty sweep IDs.")
+        return []
+
+    sweep_ids = sorted({run.sweep.id for run in runs if run.sweep is not None})
+    if not sweep_ids:
+        logging.warning(f"No sweep IDs found for group '{group_name}'. Returning empty list.")
+    else:
+        logging.info(f"Found {len(sweep_ids)} unique sweep IDs for group '{group_name}': {sweep_ids}")
+    return sweep_ids
 
 
 def evaluate_model(model_artifact_name: str, test_artifact_name: str, output_dir: str="output", px_per_mm=17.0) -> tuple:
