@@ -408,6 +408,126 @@ def predictions_viz_from_sleap_files(
     plt.close()
 
 
+def visualize_predictions_from_artifacts(
+    model_artifact_name: str,
+    test_artifact_name: str,
+    output_dir: str = "output",
+    num_frames: int = 5,
+    overwrite: bool = False
+):
+    """
+    Fetch a model and test data from W&B artifacts, generate predictions,
+    and save visualizations as PNGs for the specified number of frames.
+    The resulting images and predictions are added as W&B artifacts if newly created.
+
+    Args:
+        model_artifact_name (str): Name of the model artifact.
+        test_artifact_name (str): Name of the test dataset artifact.
+        output_dir (str): Directory to save outputs. Default is "output".
+        num_frames (int): Number of labeled frames to visualize.
+        overwrite (bool): Whether to overwrite existing predictions and images.
+    """
+    PROJECT_NAME = CONFIG["project_name"]
+    ENTITY_NAME = CONFIG["entity_name"]
+    EXPERIMENT_NAME = CONFIG["experiment_name"]
+    REGISTRY = CONFIG["registry"]
+
+    run = wandb.init(
+        project=PROJECT_NAME,
+        entity=ENTITY_NAME,
+        name=f"viz_{model_artifact_name}_on_{test_artifact_name}",
+        job_type="visualization",
+        group=EXPERIMENT_NAME
+    )
+
+    try:
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        predictions_path = output_path / f"{model_artifact_name}_on_{test_artifact_name}_test_predictions.slp"
+
+        if predictions_path.exists() and not overwrite:
+            print(f"Loading cached predictions from {predictions_path}")
+            labels_pr = sleap.load_file(predictions_path.as_posix())
+        else:
+            model_artifact = fetch_model_artifact(
+                run=run,
+                entity_name=ENTITY_NAME,
+                registry=REGISTRY,
+                artifact_name=model_artifact_name,
+                alias="latest"
+            )
+            test_artifact = fetch_model_artifact(
+                run=run,
+                entity_name=ENTITY_NAME,
+                registry=REGISTRY,
+                artifact_name=test_artifact_name,
+                alias="latest"
+            )
+
+            test_data = get_test_data(test_artifact)
+            num_labeled_frames = len(test_data)
+            if num_frames > num_labeled_frames:
+                raise ValueError(f"Requested {num_frames} frames, but test set has only {num_labeled_frames} labeled frames.")
+
+            model_dir = model_artifact.download(skip_cache=True)
+            predictor = sleap.load_model(model_dir, progress_reporting="none")
+            model = predictor.bottomup_model
+            config = predictor.bottomup_config
+
+            labels_pr, _ = sleap.nn.evals.evaluate_model(
+                cfg=config,
+                labels_gt=test_data,
+                model=model,
+                save=False
+            )
+
+            labels_pr.save(predictions_path.as_posix())
+            print(f"Saved predictions to {predictions_path}")
+
+        for i, labeled_frame in enumerate(labels_pr[:num_frames]):
+            video_filename = Path(labeled_frame.video.backend.filename).stem if labeled_frame.video else "unknown_video"
+            frame_index = labeled_frame.frame_idx
+            img_title = f"{video_filename} | Frame {frame_index}"
+            img_filename = f"{video_filename}_frame_{frame_index}_idx_{i}.png"
+            img_path = output_path / img_filename
+
+            if img_path.exists() and not overwrite:
+                print(f"Skipping existing image: {img_path}")
+                continue
+
+            fig, ax = plt.subplots(figsize=(8, 8))
+            plot_custom_img(ax, labeled_frame.image)
+            plot_custom_instances(ax, labeled_frame.instances, lw=2, ms=50)
+            fig.suptitle(img_title, fontsize=14)
+            plt.savefig(img_path.as_posix(), dpi=300)
+            plt.close()
+            print(f"Saved prediction image: {img_path}")
+
+        # Log entire directory as a W&B artifact
+        images_artifact = wandb.Artifact(
+            name=f"{model_artifact_name}_on_{test_artifact_name}_viz_outputs",
+            type="predictions_visualizations",
+            metadata={
+                "model_artifact_name": model_artifact_name,
+                "test_artifact_name": test_artifact_name,
+                "num_frames": num_frames,
+                "includes_predictions": predictions_path.exists()
+            }
+        )
+        images_artifact.add_dir(output_path.as_posix())
+        run.log_artifact(images_artifact)
+        print(f"Logged outputs as artifact: {images_artifact.name}")
+
+    except Exception as e:
+        print(f"Error during prediction visualization: {e}")
+    finally:
+        run.finish()
+
+
+
+
+
 def plot_custom_img(ax, img: np.ndarray):
     """Plot an image onto a specific Matplotlib axis."""
     ax.imshow(
