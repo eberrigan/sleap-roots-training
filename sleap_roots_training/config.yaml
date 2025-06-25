@@ -1,6 +1,6 @@
-collection_name: null
+collection_name: 20250625_cyl_arabidopsis_primary_receptive_field
 entity_name: eberrigan-salk-institute-for-biological-studies
-experiment_name: 20250530_younger_rice_seminal_sweep_input_scaling
-job_type: null
+experiment_name: 20250625_cyl_arabidopsis_primary_receptive_field
+job_type: sweep
 project_name: sleap-roots
 registry: sleap-roots-models
