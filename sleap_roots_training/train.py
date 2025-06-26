@@ -493,7 +493,7 @@ def main(
     use_sweep: bool = False,
     sweep_config: Optional[Dict] = None,
     base_dir_override: Optional[str] = None,
-    link_to_registry: bool = False,
+    link_to_registry: bool = True,
     artifact_name_prefix: Optional[str] = None,
 ):
     """Main function to process all training runs.
