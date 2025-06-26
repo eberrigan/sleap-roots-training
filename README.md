@@ -1,7 +1,7 @@
 # sleap-roots-training
 Jupyter notebooks for training and evaluating models for use in the sleap-roots-pipeline. Weights and Biases logging is integrated.
 
-See (guide)[https://www.notion.so/SLEAP-Roots-Model-Training-Guide-21b4a67a766780ec91c0f92ae459ef2c?source=copy_link]
+See [guide](https://www.notion.so/SLEAP-Roots-Model-Training-Guide-21b4a67a766780ec91c0f92ae459ef2c?source=copy_link)
 
 ## Quickstart
 
