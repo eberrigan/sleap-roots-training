@@ -9,7 +9,7 @@ import logging
 
 from matplotlib.patches import ConnectionPatch
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 from wandb.sdk.wandb_run import Run
 from wandb.sdk.artifacts.artifact import Artifact
 
@@ -617,38 +617,51 @@ def fetch_sweep_metrics(
     return df
 
 
+
 def get_sweep_ids_for_group_from_runs(
     group_name: str,
     entity_name: Optional[str] = None,
-    project_name: Optional[str] = None
+    project_name: Optional[str] = None,
+    filters: Optional[Dict] = None,
+    earliest_time: Optional[str] = None  # ISO 8601 format: "YYYY-MM-DDTHH:MM:SSZ"
 ) -> List[str]:
-    """Retrieve unique W&B sweep IDs for a given run group by inspecting runs.
+    """Retrieve unique W&B sweep IDs for a given run group, with support for extra filters and start time.
 
     Args:
-        group_name (str): The run group name (shared by runs in a sweep).
-        entity_name (Optional[str]): The W&B entity (defaults to CONFIG).
-        project_name (Optional[str]): The W&B project (defaults to CONFIG).
+        group_name (str): The run group name.
+        entity_name (Optional[str]): The W&B entity name.
+        project_name (Optional[str]): The W&B project name.
+        filters (Optional[Dict]): Additional filters to apply (e.g., {"config.model_type": "resnet"}).
+        earliest_time (Optional[str]): ISO 8601 timestamp (e.g., "2025-06-26T00:00:00Z").
 
     Returns:
-        List[str]: Unique sweep IDs associated with the group.
+        List[str]: Unique sweep IDs associated with the group and filters.
     """
-
     entity = entity_name or CONFIG["entity_name"]
     project = project_name or CONFIG["project_name"]
 
+    query_filters = {"group": group_name}
+    if filters:
+        query_filters.update(filters)
+    if earliest_time:
+        # https://docs.wandb.ai/ref/python/public-api/api/#runs
+        query_filters["createdAt"] = {"$gte": earliest_time}
+
     api = wandb.Api()
-    runs = api.runs(f"{entity}/{project}", filters={"group": group_name})
-    logging.info(f"Found {len(runs)} runs in group '{group_name}'.")
+    runs = api.runs(f"{entity}/{project}", filters=query_filters)
+
+    logging.info(f"Found {len(runs)} runs in group '{group_name}' with filters: {query_filters}")
     if not runs:
-        logging.warning(f"No runs found for group '{group_name}'. Returning empty sweep IDs.")
+        logging.warning("No runs found. Returning empty sweep IDs.")
         return []
 
     sweep_ids = sorted({run.sweep.id for run in runs if run.sweep is not None})
     if not sweep_ids:
-        logging.warning(f"No sweep IDs found for group '{group_name}'. Returning empty list.")
+        logging.warning("No sweep IDs found. Returning empty list.")
     else:
-        logging.info(f"Found {len(sweep_ids)} unique sweep IDs for group '{group_name}': {sweep_ids}")
+        logging.info(f"Found {len(sweep_ids)} unique sweep IDs: {sweep_ids}")
     return sweep_ids
+
 
 
 def evaluate_model(model_artifact_name: str, test_artifact_name: str, output_dir: str="output", px_per_mm=17.0) -> tuple:
