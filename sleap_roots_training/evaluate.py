@@ -652,7 +652,7 @@ def get_sweep_ids_for_group_from_runs(
 
     logging.info(f"Found {len(runs)} runs in group '{group_name}' with filters: {query_filters}")
     if not runs:
-        logging.warning("No runs found. Returning empty sweep IDs.")
+        logging.warning(f"No runs found in group '{group_name}' with filters: {query_filters}. Returning empty sweep IDs.")
         return []
 
     sweep_ids = sorted({run.sweep.id for run in runs if run.sweep is not None})
