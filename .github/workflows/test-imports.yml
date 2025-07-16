@@ -30,9 +30,8 @@ jobs:
         python -m pip install --upgrade pip
         # Install SLEAP via PyPI for import testing
         pip install sleap[pypi]==1.4.1
-        # Install minimal dependencies for import testing
-        pip install pyyaml pandas numpy matplotlib seaborn wandb jupyterlab ipywidgets
-        pip install -e .
+        # Install our package with dev dependencies
+        pip install -e .[dev]
     
     - name: Test basic imports
       run: |

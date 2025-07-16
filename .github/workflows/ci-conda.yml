@@ -32,14 +32,12 @@ jobs:
       run: |
         # Install SLEAP with proper channels for each platform
         if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-          mamba install -c conda-forge -c anaconda -c sleap sleap=1.4.1
+          conda install -c conda-forge -c anaconda -c sleap sleap=1.4.1
         else
-          mamba install -c conda-forge -c nvidia -c sleap/label/dev -c sleap -c anaconda sleap=1.4.1
+          conda install -c conda-forge -c nvidia -c sleap/label/dev -c sleap -c anaconda sleap=1.4.1
         fi
-        # Install development dependencies
-        pip install pytest pytest-cov pytest-mock black coverage[toml]
-        # Install our package in development mode
-        pip install -e .
+        # Install our package with dev dependencies
+        pip install -e .[dev]
     
     - name: Test imports
       shell: bash -l {0}
@@ -106,10 +104,8 @@ jobs:
         python -m pip install --upgrade pip
         # Install SLEAP via PyPI for mocked tests
         pip install sleap[pypi]==1.4.1
-        # Install only our package dependencies for testing
-        pip install pyyaml pandas numpy matplotlib seaborn wandb jupyterlab ipywidgets
-        pip install pytest pytest-cov pytest-mock black coverage[toml]
-        pip install -e .
+        # Install our package with dev dependencies
+        pip install -e .[dev]
     
     - name: Run mocked tests
       run: |
