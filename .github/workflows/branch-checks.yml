@@ -30,10 +30,9 @@ jobs:
     - name: Install minimal dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install black pytest pyyaml pandas numpy matplotlib seaborn wandb
         # Install SLEAP via PyPI for basic testing
         pip install sleap[pypi]==1.4.1
-        pip install -e .
+        pip install -e .[dev]
     
     - name: Check code formatting
       run: |
