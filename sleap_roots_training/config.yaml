@@ -1,6 +1,6 @@
 collection_name: null
 entity_name: eberrigan-salk-institute-for-biological-studies
-experiment_name: 20250625_cyl_arabidopsis_primary_receptive_field
+experiment_name: 20250711_plate_arabidopsis_primary_sweep_receptive_field
 job_type: null
 project_name: sleap-roots
 registry: sleap-roots-models
