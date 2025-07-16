@@ -42,10 +42,8 @@ Issues = "https://github.com/eberrigan/sleap-roots-training/issues"
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.packages.find]
-where = [""]
-include = ["sleap_roots_training*"]
-exclude = ["helper_functions", "tests", "helper_functions.*", "tests.*"]
+[tool.setuptools]
+packages = ["sleap_roots_training"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
