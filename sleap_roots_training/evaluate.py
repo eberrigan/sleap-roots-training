@@ -307,9 +307,11 @@ def predictions_viz_multiple_files(
                             s=Path(filename).stem,  # Filename without extension
                             ha="right",
                             va="center",
-                            fontsize=font_settings.get("text_fontsize", 12)
-                            if font_settings
-                            else 12,
+                            fontsize=(
+                                font_settings.get("text_fontsize", 12)
+                                if font_settings
+                                else 12
+                            ),
                             rotation=0,
                         )
 
@@ -321,14 +323,18 @@ def predictions_viz_multiple_files(
                             s=artifact_name,
                             ha="right",
                             va="center",
-                            fontsize=font_settings.get("text_fontsize", 12)
-                            if font_settings
-                            else 12,
+                            fontsize=(
+                                font_settings.get("text_fontsize", 12)
+                                if font_settings
+                                else 12
+                            ),
                             rotation=45,
                         )
 
                 except Exception as e:
-                    logging.error(f"Error processing artifact: {artifact_name}. Exception: {e}")
+                    logging.error(
+                        f"Error processing artifact: {artifact_name}. Exception: {e}"
+                    )
 
     # Apply custom spacing if provided
     spacing_defaults = {
@@ -443,9 +449,11 @@ def predictions_viz_from_sleap_files(
                         s=group_name,
                         ha="right",
                         va="center",
-                        fontsize=font_settings.get("text_fontsize", 12)
-                        if font_settings
-                        else 12,
+                        fontsize=(
+                            font_settings.get("text_fontsize", 12)
+                            if font_settings
+                            else 12
+                        ),
                     )
 
                 # Row label: model name (left col only)
@@ -456,9 +464,11 @@ def predictions_viz_from_sleap_files(
                         s=model_name,
                         ha="right",
                         va="center",
-                        fontsize=font_settings.get("text_fontsize", 12)
-                        if font_settings
-                        else 12,
+                        fontsize=(
+                            font_settings.get("text_fontsize", 12)
+                            if font_settings
+                            else 12
+                        ),
                     )
 
             except Exception as e:
