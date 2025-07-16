@@ -328,7 +328,7 @@ def predictions_viz_multiple_files(
                         )
 
                 except Exception as e:
-                    print(f"Error processing artifact: {artifact_name}. Exception: {e}")
+                    logging.error(f"Error processing artifact: {artifact_name}. Exception: {e}")
 
     # Apply custom spacing if provided
     spacing_defaults = {
@@ -462,7 +462,7 @@ def predictions_viz_from_sleap_files(
                     )
 
             except Exception as e:
-                print(
+                logging.error(
                     f"Error loading/plotting {slp_path} (model: {model_name}, group: {group_name}): {e}"
                 )
 
