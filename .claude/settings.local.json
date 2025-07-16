@@ -8,7 +8,9 @@
       "Bash(python -m pytest tests/test_config.py -v)",
       "Bash(python -m pytest tests/test_config.py::TestConfig::test_reset_config -v)",
       "Bash(python -m pytest tests/test_imports.py tests/test_config.py -v --tb=short)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(pip uninstall:*)"
     ],
     "deny": []
   }
