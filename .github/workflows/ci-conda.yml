@@ -31,10 +31,12 @@ jobs:
       shell: bash -l {0}
       run: |
         # Install SLEAP with proper channels for each platform
+        # Follow official SLEAP conda installation instructions
         if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
           conda install -c conda-forge -c anaconda -c sleap sleap=1.4.1
         else
-          conda install -c conda-forge -c nvidia -c sleap/label/dev -c sleap -c anaconda sleap=1.4.1
+          # For Linux/Windows, use CPU-only version to avoid CUDA conflicts
+          conda install -c conda-forge -c sleap sleap=1.4.1
         fi
         # Install our package with dev dependencies
         pip install -e .[dev]
