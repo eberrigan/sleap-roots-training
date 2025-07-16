@@ -1,0 +1,103 @@
+name: Test Imports
+
+on:
+  push:
+    branches: [ "**" ]  # Run on all branches
+  pull_request:
+    branches: [ "**" ]  # Run on PRs to any branch
+  schedule:
+    # Run daily at 02:00 UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  test-imports:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install package
+      run: |
+        python -m pip install --upgrade pip
+        # Install SLEAP via PyPI for import testing
+        pip install sleap[pypi]==1.4.1
+        # Install minimal dependencies for import testing
+        pip install pyyaml pandas numpy matplotlib seaborn wandb jupyterlab ipywidgets
+        pip install -e .
+    
+    - name: Test basic imports
+      run: |
+        python -c "
+        import sleap_roots_training
+        print('✅ sleap_roots_training imported successfully')
+        
+        import sleap_roots_training.config
+        print('✅ sleap_roots_training.config imported successfully')
+        
+        import sleap_roots_training.train  
+        print('✅ sleap_roots_training.train imported successfully')
+        
+        import sleap_roots_training.evaluate
+        print('✅ sleap_roots_training.evaluate imported successfully')
+        
+        import sleap_roots_training.models
+        print('✅ sleap_roots_training.models imported successfully')
+        
+        import sleap_roots_training.datasets
+        print('✅ sleap_roots_training.datasets imported successfully')
+        
+        print('🎉 All imports successful!')
+        "
+    
+    - name: Test configuration loading
+      run: |
+        python -c "
+        from sleap_roots_training.config import load_config, DEFAULT_CONFIG
+        config = load_config()
+        print('✅ Configuration loaded successfully')
+        print(f'Project name: {config.get(\"project_name\", \"Not set\")}')
+        "
+    
+    - name: Test excluded imports (should fail)
+      run: |
+        python -c "
+        try:
+            import helper_functions
+            print('❌ helper_functions should not be importable')
+            exit(1)
+        except ImportError:
+            print('✅ helper_functions correctly excluded')
+        
+        try:
+            import tests
+            print('❌ tests should not be importable')
+            exit(1)
+        except ImportError:
+            print('✅ tests correctly excluded')
+        
+        print('🎉 Package exclusions working correctly!')
+        "
+    
+    - name: Test package metadata
+      run: |
+        python -c "
+        import sleap_roots_training
+        print(f'Package file: {sleap_roots_training.__file__}')
+        
+        # Check if package has __version__ attribute
+        if hasattr(sleap_roots_training, '__version__'):
+            print(f'Version: {sleap_roots_training.__version__}')
+        else:
+            print('No version attribute found')
+        
+        print('✅ Package metadata accessible')
+        "
