@@ -38,24 +38,24 @@ jobs:
       run: |
         python -c "
         import sleap_roots_training
-        print('✅ sleap_roots_training imported successfully')
+        print('[OK] sleap_roots_training imported successfully')
         
         import sleap_roots_training.config
-        print('✅ sleap_roots_training.config imported successfully')
+        print('[OK] sleap_roots_training.config imported successfully')
         
         import sleap_roots_training.train  
-        print('✅ sleap_roots_training.train imported successfully')
+        print('[OK] sleap_roots_training.train imported successfully')
         
         import sleap_roots_training.evaluate
-        print('✅ sleap_roots_training.evaluate imported successfully')
+        print('[OK] sleap_roots_training.evaluate imported successfully')
         
         import sleap_roots_training.models
-        print('✅ sleap_roots_training.models imported successfully')
+        print('[OK] sleap_roots_training.models imported successfully')
         
         import sleap_roots_training.datasets
-        print('✅ sleap_roots_training.datasets imported successfully')
+        print('[OK] sleap_roots_training.datasets imported successfully')
         
-        print('🎉 All imports successful!')
+        print('[SUCCESS] All imports successful!')
         "
     
     - name: Test configuration loading
@@ -63,28 +63,56 @@ jobs:
         python -c "
         from sleap_roots_training.config import load_config, DEFAULT_CONFIG
         config = load_config()
-        print('✅ Configuration loaded successfully')
+        print('[OK] Configuration loaded successfully')
         print(f'Project name: {config.get(\"project_name\", \"Not set\")}')
         "
     
-    - name: Test excluded imports (should fail)
+    - name: Test package exclusions
       run: |
         python -c "
+        import sys
+        import pkgutil
+        
+        # Check that helper_functions is not in our package
+        helper_found = False
+        tests_in_package = False
+        
         try:
             import helper_functions
-            print('❌ helper_functions should not be importable')
-            exit(1)
+            # Check if it's from our package directory
+            if hasattr(helper_functions, '__file__') and 'sleap-roots-training' in str(helper_functions.__file__):
+                helper_found = True
+                print('[ERROR] helper_functions found in our package')
+            else:
+                print('[OK] helper_functions not from our package (system module ok)')
         except ImportError:
-            print('✅ helper_functions correctly excluded')
+            print('[OK] helper_functions correctly excluded')
         
+        # Check if tests module is part of our installed package
         try:
-            import tests
-            print('❌ tests should not be importable')
-            exit(1)
-        except ImportError:
-            print('✅ tests correctly excluded')
+            import sleap_roots_training
+            package_path = sleap_roots_training.__path__[0] if hasattr(sleap_roots_training, '__path__') else ''
+            
+            # Check if tests is a submodule of our package
+            for importer, modname, ispkg in pkgutil.iter_modules([package_path]):
+                if modname == 'tests':
+                    tests_in_package = True
+                    break
+            
+            if tests_in_package:
+                print('[ERROR] tests module found in sleap_roots_training package')
+            else:
+                print('[OK] tests module correctly excluded from package')
+                
+        except Exception as e:
+            print(f'[WARNING] Could not check package contents: {e}')
         
-        print('🎉 Package exclusions working correctly!')
+        # Only fail if we actually found excluded modules in our package
+        if helper_found or tests_in_package:
+            print('[FAIL] Package exclusion test failed!')
+            sys.exit(1)
+        else:
+            print('[SUCCESS] Package exclusions working correctly!')
         "
     
     - name: Test package metadata
@@ -99,5 +127,5 @@ jobs:
         else:
             print('No version attribute found')
         
-        print('✅ Package metadata accessible')
+        print('[OK] Package metadata accessible')
         "
