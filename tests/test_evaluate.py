@@ -1,0 +1,571 @@
+import pytest
+import tempfile
+import pandas as pd
+import numpy as np
+from pathlib import Path
+from unittest.mock import patch, MagicMock, Mock
+
+from sleap_roots_training.evaluate import (
+    create_artifact_name,
+    fetch_model_artifact,
+    get_eval_metadata,
+    get_predictions,
+    get_test_data,
+    fetch_sweep_metrics,
+    get_sweep_ids_for_group_from_runs,
+    evaluate_model,
+    main
+)
+
+
+class TestCreateArtifactName:
+    """Test suite for create_artifact_name function."""
+    
+    def test_create_artifact_name(self):
+        """Test artifact name creation."""
+        name = create_artifact_name("sorghum-primary", "001")
+        assert name == "sorghum-primary_v001"
+    
+    def test_create_artifact_name_different_inputs(self):
+        """Test artifact name creation with different inputs."""
+        name1 = create_artifact_name("wheat-seminal", "002")
+        assert name1 == "wheat-seminal_v002"
+        
+        name2 = create_artifact_name("rice-lateral", "123")
+        assert name2 == "rice-lateral_v123"
+
+
+class TestFetchModelArtifact:
+    """Test suite for fetch_model_artifact function."""
+    
+    @patch('builtins.print')
+    def test_fetch_model_artifact_latest(self, mock_print):
+        """Test fetching latest model artifact."""
+        mock_run = MagicMock()
+        mock_artifact = MagicMock()
+        mock_run.use_artifact.return_value = mock_artifact
+        
+        result = fetch_model_artifact(
+            run=mock_run,
+            entity_name="test_entity",
+            registry="test_registry",
+            artifact_name="test_artifact"
+        )
+        
+        expected_artifact_name = "test_entity-org/wandb-registry-test_registry/test_artifact:latest"
+        mock_run.use_artifact.assert_called_once_with(expected_artifact_name)
+        mock_print.assert_called_once_with(f"Fetching artifact: {expected_artifact_name}")
+        assert result == mock_artifact
+    
+    @patch('builtins.print')
+    def test_fetch_model_artifact_specific_alias(self, mock_print):
+        """Test fetching model artifact with specific alias."""
+        mock_run = MagicMock()
+        mock_artifact = MagicMock()
+        mock_run.use_artifact.return_value = mock_artifact
+        
+        result = fetch_model_artifact(
+            run=mock_run,
+            entity_name="test_entity",
+            registry="test_registry",
+            artifact_name="test_artifact",
+            alias="v1"
+        )
+        
+        expected_artifact_name = "test_entity-org/wandb-registry-test_registry/test_artifact:v1"
+        mock_run.use_artifact.assert_called_once_with(expected_artifact_name)
+        assert result == mock_artifact
+
+
+class TestGetEvalMetadata:
+    """Test suite for get_eval_metadata function."""
+    
+    def test_get_eval_metadata_default_key(self):
+        """Test getting evaluation metadata with default key."""
+        mock_artifact = MagicMock()
+        mock_artifact.metadata = {"dist_avg": 5.25, "other_metric": 0.95}
+        
+        result = get_eval_metadata(mock_artifact)
+        
+        assert result == 5.25
+    
+    def test_get_eval_metadata_custom_key(self):
+        """Test getting evaluation metadata with custom key."""
+        mock_artifact = MagicMock()
+        mock_artifact.metadata = {"dist_avg": 5.25, "vis_precision": 0.87}
+        
+        result = get_eval_metadata(mock_artifact, metadata_key="vis_precision")
+        
+        assert result == 0.87
+    
+    def test_get_eval_metadata_missing_key(self):
+        """Test getting evaluation metadata with missing key."""
+        mock_artifact = MagicMock()
+        mock_artifact.metadata = {"dist_avg": 5.25}
+        
+        result = get_eval_metadata(mock_artifact, metadata_key="nonexistent_key")
+        
+        assert result is None
+
+
+class TestGetPredictions:
+    """Test suite for get_predictions function."""
+    
+    @patch('sleap_roots_training.evaluate.sleap.load_model')
+    @patch('sleap_roots_training.evaluate.sleap.load_video')
+    @patch('sleap_roots_training.evaluate.sleap.load_file')
+    def test_get_predictions_new_file(self, mock_load_file, mock_load_video, mock_load_model):
+        """Test getting predictions for new file."""
+        mock_predictor = MagicMock()
+        mock_predictions = MagicMock()
+        mock_video = MagicMock()
+        
+        mock_load_model.return_value = mock_predictor
+        mock_load_video.return_value = mock_video
+        mock_predictor.predict.return_value = mock_predictions
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            filename = str(Path(temp_dir) / "test_video.mp4")
+            model_path = str(Path(temp_dir) / "test_model")
+            
+            result = get_predictions(filename, model_path)
+            
+            mock_load_model.assert_called_once_with(model_path, progress_reporting="none")
+            mock_load_video.assert_called_once_with(filename, dataset="vol", channels_first=False)
+            mock_predictor.predict.assert_called_once_with(mock_video)
+            mock_predictions.save.assert_called_once()
+            assert result == mock_predictions
+    
+    @patch('sleap_roots_training.evaluate.sleap.load_file')
+    @patch('sleap_roots_training.evaluate.Path.exists')
+    def test_get_predictions_existing_file(self, mock_exists, mock_load_file):
+        """Test getting predictions for existing file."""
+        mock_exists.return_value = True
+        mock_predictions = MagicMock()
+        mock_load_file.return_value = mock_predictions
+        
+        filename = "test_video.mp4"
+        model_path = "test_model"
+        
+        result = get_predictions(filename, model_path)
+        
+        mock_load_file.assert_called_once()
+        assert result == mock_predictions
+    
+    @patch('sleap_roots_training.evaluate.sleap.load_model')
+    @patch('sleap_roots_training.evaluate.sleap.load_video')
+    @patch('sleap_roots_training.evaluate.sleap.load_file')
+    @patch('sleap_roots_training.evaluate.Path.exists')
+    def test_get_predictions_overwrite(self, mock_exists, mock_load_file, mock_load_video, mock_load_model):
+        """Test getting predictions with overwrite=True."""
+        mock_exists.return_value = True
+        mock_predictor = MagicMock()
+        mock_predictions = MagicMock()
+        mock_video = MagicMock()
+        
+        mock_load_model.return_value = mock_predictor
+        mock_load_video.return_value = mock_video
+        mock_predictor.predict.return_value = mock_predictions
+        
+        filename = "test_video.mp4"
+        model_path = "test_model"
+        
+        result = get_predictions(filename, model_path, overwrite=True)
+        
+        # Should not call load_file even though file exists
+        mock_load_file.assert_not_called()
+        mock_load_model.assert_called_once()
+        assert result == mock_predictions
+
+
+class TestGetTestData:
+    """Test suite for get_test_data function."""
+    
+    @patch('sleap_roots_training.evaluate.sleap.load_config')
+    @patch('sleap_roots_training.evaluate.sleap.load_file')
+    @patch('builtins.print')
+    def test_get_test_data(self, mock_print, mock_load_file, mock_load_config):
+        """Test getting test data from model artifact."""
+        mock_artifact = MagicMock()
+        mock_entry = MagicMock()
+        mock_config = MagicMock()
+        mock_config.data.labels.test_labels = "/path/to/test_labels.slp"
+        mock_labels = MagicMock()
+        
+        mock_artifact.get_entry.return_value = mock_entry
+        mock_entry.download.return_value = "/path/to/config.json"
+        mock_load_config.return_value = mock_config
+        mock_load_file.return_value = mock_labels
+        
+        result = get_test_data(mock_artifact)
+        
+        mock_artifact.get_entry.assert_called_once_with("training_config.json")
+        mock_entry.download.assert_called_once()
+        mock_load_config.assert_called_once_with("/path/to/config.json")
+        mock_load_file.assert_called_once_with("/path/to/test_labels.slp")
+        mock_print.assert_called_once_with("Loaded test data from /path/to/test_labels.slp.")
+        assert result == mock_labels
+
+
+class TestFetchSweepMetrics:
+    """Test suite for fetch_sweep_metrics function."""
+    
+    @patch('sleap_roots_training.evaluate.CONFIG')
+    @patch('sleap_roots_training.evaluate.wandb.Api')
+    def test_fetch_sweep_metrics(self, mock_api_class, mock_config):
+        """Test fetching sweep metrics."""
+        # Setup config mock
+        mock_config.__getitem__.side_effect = lambda key: {
+            "entity_name": "test_entity",
+            "project_name": "test_project"
+        }[key]
+        
+        # Setup API mock
+        mock_api = MagicMock()
+        mock_api_class.return_value = mock_api
+        
+        # Setup sweep mock
+        mock_sweep = MagicMock()
+        mock_api.sweep.return_value = mock_sweep
+        
+        # Setup runs mock
+        mock_run1 = MagicMock()
+        mock_run1.state = "finished"
+        mock_run1.id = "run1"
+        mock_run1.name = "test_run_1"
+        mock_run1.group = "test_group"
+        mock_run1.summary = {"dist_avg": 5.0, "vis_precision": 0.9}
+        mock_run1.config = {"param1": 1.0, "param2": "value"}
+        
+        mock_run2 = MagicMock()
+        mock_run2.state = "finished"
+        mock_run2.id = "run2"
+        mock_run2.name = "test_run_2"
+        mock_run2.group = "test_group"
+        mock_run2.summary = {"dist_avg": 6.0, "vis_precision": 0.8}
+        mock_run2.config = {"param1": 2.0, "param2": "other_value"}
+        
+        mock_sweep.runs = [mock_run1, mock_run2]
+        
+        result = fetch_sweep_metrics(
+            sweep_ids=["sweep1"],
+            target_metrics=["dist_avg", "vis_precision"],
+            include_config=True
+        )
+        
+        mock_api.sweep.assert_called_once_with("test_entity/test_project/sweep1")
+        
+        assert len(result) == 2
+        assert result.iloc[0]["run_id"] == "run1"
+        assert result.iloc[0]["dist_avg"] == 5.0
+        assert result.iloc[0]["config/param1"] == 1.0
+        assert result.iloc[1]["run_id"] == "run2"
+        assert result.iloc[1]["vis_precision"] == 0.8
+    
+    @patch('sleap_roots_training.evaluate.CONFIG')
+    @patch('sleap_roots_training.evaluate.wandb.Api')
+    def test_fetch_sweep_metrics_no_config(self, mock_api_class, mock_config):
+        """Test fetching sweep metrics without config."""
+        # Setup mocks
+        mock_config.__getitem__.side_effect = lambda key: {
+            "entity_name": "test_entity",
+            "project_name": "test_project"
+        }[key]
+        
+        mock_api = MagicMock()
+        mock_api_class.return_value = mock_api
+        
+        mock_sweep = MagicMock()
+        mock_api.sweep.return_value = mock_sweep
+        
+        mock_run = MagicMock()
+        mock_run.state = "finished"
+        mock_run.id = "run1"
+        mock_run.name = "test_run"
+        mock_run.group = "test_group"
+        mock_run.summary = {"dist_avg": 5.0}
+        mock_run.config = {"param1": 1.0}
+        
+        mock_sweep.runs = [mock_run]
+        
+        result = fetch_sweep_metrics(
+            sweep_ids=["sweep1"],
+            target_metrics=["dist_avg"],
+            include_config=False
+        )
+        
+        assert len(result) == 1
+        assert "config/param1" not in result.columns
+        assert result.iloc[0]["dist_avg"] == 5.0
+    
+    @patch('sleap_roots_training.evaluate.CONFIG')
+    @patch('sleap_roots_training.evaluate.wandb.Api')
+    def test_fetch_sweep_metrics_skip_unfinished(self, mock_api_class, mock_config):
+        """Test fetching sweep metrics skips unfinished runs."""
+        # Setup mocks
+        mock_config.__getitem__.side_effect = lambda key: {
+            "entity_name": "test_entity",
+            "project_name": "test_project"
+        }[key]
+        
+        mock_api = MagicMock()
+        mock_api_class.return_value = mock_api
+        
+        mock_sweep = MagicMock()
+        mock_api.sweep.return_value = mock_sweep
+        
+        mock_run1 = MagicMock()
+        mock_run1.state = "finished"
+        mock_run1.id = "run1"
+        mock_run1.name = "test_run_1"
+        mock_run1.group = "test_group"
+        mock_run1.summary = {"dist_avg": 5.0}
+        mock_run1.config = {}
+        
+        mock_run2 = MagicMock()
+        mock_run2.state = "running"  # Unfinished
+        mock_run2.id = "run2"
+        
+        mock_sweep.runs = [mock_run1, mock_run2]
+        
+        result = fetch_sweep_metrics(
+            sweep_ids=["sweep1"],
+            target_metrics=["dist_avg"],
+            include_config=False
+        )
+        
+        # Should only include finished run
+        assert len(result) == 1
+        assert result.iloc[0]["run_id"] == "run1"
+
+
+class TestGetSweepIdsForGroupFromRuns:
+    """Test suite for get_sweep_ids_for_group_from_runs function."""
+    
+    @patch('sleap_roots_training.evaluate.CONFIG')
+    @patch('sleap_roots_training.evaluate.wandb.Api')
+    @patch('sleap_roots_training.evaluate.logging')
+    def test_get_sweep_ids_for_group_from_runs(self, mock_logging, mock_api_class, mock_config):
+        """Test getting sweep IDs for a group from runs."""
+        # Setup config mock
+        mock_config.__getitem__.side_effect = lambda key: {
+            "entity_name": "test_entity",
+            "project_name": "test_project"
+        }[key]
+        
+        # Setup API mock
+        mock_api = MagicMock()
+        mock_api_class.return_value = mock_api
+        
+        # Setup runs mock
+        mock_run1 = MagicMock()
+        mock_run1.sweep = MagicMock()
+        mock_run1.sweep.id = "sweep1"
+        
+        mock_run2 = MagicMock()
+        mock_run2.sweep = MagicMock()
+        mock_run2.sweep.id = "sweep2"
+        
+        mock_run3 = MagicMock()
+        mock_run3.sweep = MagicMock()
+        mock_run3.sweep.id = "sweep1"  # Duplicate
+        
+        mock_run4 = MagicMock()
+        mock_run4.sweep = None  # No sweep
+        
+        mock_api.runs.return_value = [mock_run1, mock_run2, mock_run3, mock_run4]
+        
+        result = get_sweep_ids_for_group_from_runs("test_group")
+        
+        mock_api.runs.assert_called_once_with(
+            "test_entity/test_project",
+            filters={"group": "test_group"}
+        )
+        
+        assert result == ["sweep1", "sweep2"]  # Sorted and unique
+    
+    @patch('sleap_roots_training.evaluate.CONFIG')
+    @patch('sleap_roots_training.evaluate.wandb.Api')
+    @patch('sleap_roots_training.evaluate.logging')
+    def test_get_sweep_ids_with_filters(self, mock_logging, mock_api_class, mock_config):
+        """Test getting sweep IDs with additional filters."""
+        # Setup config mock
+        mock_config.__getitem__.side_effect = lambda key: {
+            "entity_name": "test_entity",
+            "project_name": "test_project"
+        }[key]
+        
+        mock_api = MagicMock()
+        mock_api_class.return_value = mock_api
+        mock_api.runs.return_value = []
+        
+        filters = {"config.model_type": "resnet"}
+        earliest_time = "2025-01-01T00:00:00Z"
+        
+        get_sweep_ids_for_group_from_runs(
+            "test_group",
+            filters=filters,
+            earliest_time=earliest_time
+        )
+        
+        expected_filters = {
+            "group": "test_group",
+            "config.model_type": "resnet",
+            "createdAt": {"$gte": "2025-01-01T00:00:00Z"}
+        }
+        
+        mock_api.runs.assert_called_once_with(
+            "test_entity/test_project",
+            filters=expected_filters
+        )
+    
+    @patch('sleap_roots_training.evaluate.CONFIG')
+    @patch('sleap_roots_training.evaluate.wandb.Api')
+    @patch('sleap_roots_training.evaluate.logging')
+    def test_get_sweep_ids_no_runs(self, mock_logging, mock_api_class, mock_config):
+        """Test getting sweep IDs when no runs found."""
+        # Setup config mock
+        mock_config.__getitem__.side_effect = lambda key: {
+            "entity_name": "test_entity",
+            "project_name": "test_project"
+        }[key]
+        
+        mock_api = MagicMock()
+        mock_api_class.return_value = mock_api
+        mock_api.runs.return_value = []
+        
+        result = get_sweep_ids_for_group_from_runs("nonexistent_group")
+        
+        assert result == []
+        mock_logging.warning.assert_called_once()
+
+
+class TestEvaluateModel:
+    """Test suite for evaluate_model function."""
+    
+    @patch('sleap_roots_training.evaluate.CONFIG')
+    @patch('sleap_roots_training.evaluate.wandb.init')
+    @patch('sleap_roots_training.evaluate.fetch_model_artifact')
+    @patch('sleap_roots_training.evaluate.get_test_data')
+    @patch('sleap_roots_training.evaluate.sleap.load_model')
+    @patch('sleap_roots_training.evaluate.sleap.nn.evals.evaluate_model')
+    @patch('sleap_roots_training.evaluate.Path.mkdir')
+    def test_evaluate_model(self, mock_mkdir, mock_eval, mock_load_model, mock_get_test_data, 
+                           mock_fetch_artifact, mock_wandb_init, mock_config):
+        """Test model evaluation."""
+        # Setup config mock
+        mock_config.__getitem__.side_effect = lambda key: {
+            "project_name": "test_project",
+            "entity_name": "test_entity",
+            "experiment_name": "test_experiment",
+            "registry": "test_registry"
+        }[key]
+        
+        # Setup other mocks
+        mock_run = MagicMock()
+        mock_wandb_init.return_value = mock_run
+        
+        mock_model_artifact = MagicMock()
+        mock_model_artifact.download.return_value = "/path/to/model"
+        mock_fetch_artifact.return_value = mock_model_artifact
+        
+        mock_test_data = MagicMock()
+        mock_get_test_data.return_value = mock_test_data
+        
+        mock_predictor = MagicMock()
+        mock_predictor.bottomup_model = MagicMock()
+        mock_predictor.bottomup_config = MagicMock()
+        mock_load_model.return_value = mock_predictor
+        
+        mock_labels_pr = MagicMock()
+        mock_metrics = {
+            "dist.p50": 85.0,
+            "dist.p90": 170.0,
+            "dist.p95": 255.0,
+            "dist.p99": 340.0,
+            "dist.avg": 100.0,
+            "dist.dists": np.array([[85.0, 170.0], [255.0, 340.0]]),
+            "vis.precision": 0.95,
+            "vis.recall": 0.90,
+            "oks_voc.mAP": 0.85,
+            "oks_voc.mAR": 0.80
+        }
+        mock_eval.return_value = (mock_labels_pr, mock_metrics)
+        
+        with patch('sleap_roots_training.evaluate.pd.DataFrame.to_csv'):
+            with patch('sleap_roots_training.evaluate.plt.savefig'):
+                with patch('sleap_roots_training.evaluate.plt.close'):
+                    labels_pr, metrics, metrics_summary = evaluate_model(
+                        "test_model_artifact",
+                        "test_test_artifact",
+                        output_dir="test_output",
+                        px_per_mm=17.0
+                    )
+        
+        # Verify function calls
+        mock_wandb_init.assert_called_once()
+        mock_fetch_artifact.assert_called()
+        mock_get_test_data.assert_called_once()
+        mock_load_model.assert_called_once()
+        mock_eval.assert_called_once()
+        
+        # Check return values
+        assert labels_pr == mock_labels_pr
+        assert metrics == mock_metrics
+        assert metrics_summary["dist_avg"] == 100.0 / 17.0
+        assert metrics_summary["vis_prec"] == 0.95
+
+
+class TestMainFunction:
+    """Test suite for main function."""
+    
+    @patch('sleap_roots_training.evaluate.CONFIG')
+    @patch('sleap_roots_training.evaluate.wandb.init')
+    @patch('sleap_roots_training.evaluate.fetch_model_artifact')
+    def test_main_function(self, mock_fetch_artifact, mock_wandb_init, mock_config):
+        """Test main function for fetching metrics."""
+        # Setup config mock
+        mock_config.__getitem__.side_effect = lambda key: {
+            "project_name": "test_project",
+            "entity_name": "test_entity",
+            "experiment_name": "test_experiment",
+            "registry": "test_registry"
+        }[key]
+        
+        # Setup other mocks
+        mock_run = MagicMock()
+        mock_wandb_init.return_value = mock_run
+        
+        mock_artifact = MagicMock()
+        mock_artifact.metadata = {
+            "dist_avg": 5.0,
+            "dist_p50": 4.0,
+            "dist_p90": 8.0,
+            "dist_p95": 10.0,
+            "dist_p99": 15.0
+        }
+        mock_fetch_artifact.return_value = mock_artifact
+        
+        with patch('sleap_roots_training.evaluate.pd.DataFrame.to_csv'):
+            with patch('sleap_roots_training.evaluate.wandb.Artifact') as mock_artifact_class:
+                mock_new_artifact = MagicMock()
+                mock_artifact_class.return_value = mock_new_artifact
+                
+                result = main(
+                    groups=["group1", "group2"],
+                    versions=["001", "002"],
+                    tags=["test"],
+                    metrics_artifact_name="test_metrics",
+                    csv_path="test_metrics.csv"
+                )
+        
+        # Should fetch artifacts for each group/version combination
+        assert mock_fetch_artifact.call_count == 4  # 2 groups * 2 versions
+        
+        # Should create and log artifact
+        mock_artifact_class.assert_called_once()
+        mock_run.log_artifact.assert_called_once()
+        
+        # Should return DataFrame
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 4
