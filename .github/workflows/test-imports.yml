@@ -64,7 +64,7 @@ jobs:
         from sleap_roots_training.config import load_config, DEFAULT_CONFIG
         config = load_config()
         print('[OK] Configuration loaded successfully')
-        print(f'Project name: {config.get(\"project_name\", \"Not set\")}')
+        print('Project name: ' + config.get('project_name', 'Not set'))
         "
     
     - name: Test package exclusions
