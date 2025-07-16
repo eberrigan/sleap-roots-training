@@ -21,7 +21,7 @@ A Python package for training and evaluating SLEAP models for root tracking, wit
 
 ### Prerequisites
 
-1. **Python 3.8-3.9**: SLEAP requires Python 3.8 or 3.9 (not 3.10+)
+1. **Python 3.8**: SLEAP requires Python 3.8 (3.9 has compatibility issues)
 2. **SLEAP Environment**: Install SLEAP following the [official guide](https://sleap.ai/installation.html)
 3. **Weights & Biases**: Sign up for a [W&B account](https://wandb.ai)
 
