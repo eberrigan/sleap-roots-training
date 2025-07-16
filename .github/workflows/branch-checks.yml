@@ -96,5 +96,5 @@ jobs:
         import sleap_roots_training
         from sleap_roots_training.config import load_config
         config = load_config()
-        print(f'[OK] Cross-platform test passed on {\'${{ matrix.os }}\'} Python {\'${{ matrix.python-version }}\'}')
+        print('[OK] Cross-platform test passed on ${{ matrix.os }} Python ${{ matrix.python-version }}')
         "

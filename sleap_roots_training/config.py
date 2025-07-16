@@ -32,7 +32,7 @@ def load_config() -> Dict[str, Any]:
     """
     if not CONFIG_PATH.exists():
         create_default_config()
-    
+
     with open(CONFIG_PATH, "r") as file:
         return yaml.safe_load(file)
 
@@ -72,7 +72,7 @@ def reset_config() -> None:
 
 
 # Ensure the config file is present and load it
-CONFIG = load_config() 
+CONFIG = load_config()
 
 # Assign constants from the loaded config
 PROJECT_NAME: str = CONFIG["project_name"]
