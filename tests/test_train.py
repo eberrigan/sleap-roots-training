@@ -69,8 +69,9 @@ class TestGetTrainingGroups:
 class TestLogToWandb:
     """Test suite for log_to_wandb function."""
 
+    @patch("sleap_roots_training.train.wandb.config")
     @patch("sleap_roots_training.train.wandb.init")
-    def test_log_to_wandb_basic(self, mock_wandb_init):
+    def test_log_to_wandb_basic(self, mock_wandb_init, mock_wandb_config):
         """Test basic W&B logging."""
         mock_run = MagicMock()
         mock_wandb_init.return_value = mock_run
@@ -104,8 +105,9 @@ class TestLogToWandb:
 
         assert result == mock_run
 
+    @patch("sleap_roots_training.train.wandb.config")
     @patch("sleap_roots_training.train.wandb.init")
-    def test_log_to_wandb_no_tags(self, mock_wandb_init):
+    def test_log_to_wandb_no_tags(self, mock_wandb_init, mock_wandb_config):
         """Test W&B logging without tags."""
         mock_run = MagicMock()
         mock_wandb_init.return_value = mock_run
@@ -319,26 +321,28 @@ class TestUpdateConfigWithWandb:
     @patch("sleap_roots_training.train.logging")
     def test_update_config_with_wandb(self, mock_logging, mock_wandb_config):
         """Test updating config with W&B parameters."""
-        mock_wandb_config.__bool__ = lambda self: True
-        mock_wandb_config.__iter__ = lambda self: iter(
-            {
-                "data.preprocessing.input_scaling": 0.5,
-                "model.backbone.type": "resnet50",
-                "training.batch_size": 32,
-            }.items()
-        )
-
-        original_config = {
-            "data": {"preprocessing": {"input_scaling": 1.0}},
-            "model": {"backbone": {"type": "resnet18"}},
-            "training": {"batch_size": 16},
+        # Mock wandb.config as a dictionary
+        mock_config_dict = {
+            "data.preprocessing.input_scaling": 0.5,
+            "model.backbone.type": "resnet50",
+            "training.batch_size": 32,
         }
+        mock_wandb_config.__bool__ = lambda: True
+        mock_wandb_config.__iter__ = lambda: iter(mock_config_dict.items())
+        mock_wandb_config.items = lambda: mock_config_dict.items()
+        # Mock dict() constructor call
+        with patch("builtins.dict", return_value=mock_config_dict):
+            original_config = {
+                "data": {"preprocessing": {"input_scaling": 1.0}},
+                "model": {"backbone": {"type": "resnet18"}},
+                "training": {"batch_size": 16},
+            }
 
-        updated_config = update_config_with_wandb(original_config)
+            updated_config = update_config_with_wandb(original_config)
 
-        assert updated_config["data"]["preprocessing"]["input_scaling"] == 0.5
-        assert updated_config["model"]["backbone"]["type"] == "resnet50"
-        assert updated_config["training"]["batch_size"] == 32
+            assert updated_config["data"]["preprocessing"]["input_scaling"] == 0.5
+            assert updated_config["model"]["backbone"]["type"] == "resnet50"
+            assert updated_config["training"]["batch_size"] == 32
 
     @patch("sleap_roots_training.train.wandb.config")
     def test_update_config_no_wandb_config(self, mock_wandb_config):
@@ -534,9 +538,11 @@ class TestMainFunction:
         with pytest.raises(FileNotFoundError, match="Config file not found"):
             main(csv_path="test.csv", use_sweep=False, link_to_registry=True)
 
+    @patch("builtins.open", new_callable=mock_open, read_data='{"test": "config"}')
+    @patch("sleap_roots_training.train.Path.exists")
     @patch("sleap_roots_training.train.CONFIG")
     @patch("sleap_roots_training.train.load_training_data")
-    def test_main_sweep_without_config(self, mock_load_data, mock_config):
+    def test_main_sweep_without_config(self, mock_load_data, mock_config, mock_exists, mock_file):
         """Test main function with sweep but no sweep config."""
         # Setup mocks
         mock_config.__getitem__.side_effect = lambda key: {
@@ -548,6 +554,9 @@ class TestMainFunction:
 
         mock_df = pd.DataFrame({"version": [1], "path": ["/path/to/v1/config.json"]})
         mock_load_data.return_value = mock_df
+        
+        # Mock file existence to avoid FileNotFoundError
+        mock_exists.return_value = True
 
         with pytest.raises(ValueError, match="Sweep config must be provided"):
             main(

@@ -128,7 +128,7 @@ class TestFetchModelArtifactFromExperiment:
             ),
         ]
         mock_print.assert_has_calls(
-            [pytest.mock.call(*args) for args in expected_calls]
+            [call(*args) for args in expected_calls]
         )
 
 
@@ -219,7 +219,7 @@ class TestFetchModelArtifactAndLinkToRegistry:
             ),
         ]
         mock_print.assert_has_calls(
-            [pytest.mock.call(*args) for args in expected_calls]
+            [call(*args) for args in expected_calls]
         )
 
 
