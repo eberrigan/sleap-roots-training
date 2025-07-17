@@ -522,12 +522,15 @@ class TestEvaluateModel:
         with patch("sleap_roots_training.evaluate.pd.DataFrame.to_csv"):
             with patch("sleap_roots_training.evaluate.plt.savefig"):
                 with patch("sleap_roots_training.evaluate.plt.close"):
-                    labels_pr, metrics, metrics_summary = evaluate_model(
-                        "test_model_artifact",
-                        "test_test_artifact",
-                        output_dir="test_output",
-                        px_per_mm=17.0,
-                    )
+                    with patch("sleap_roots_training.evaluate.wandb.Artifact") as mock_artifact_class:
+                        # Mock the wandb.Artifact constructor to return mock artifacts
+                        mock_artifact_class.return_value = MagicMock()
+                        labels_pr, metrics, metrics_summary = evaluate_model(
+                            "test_model_artifact",
+                            "test_test_artifact",
+                            output_dir="test_output",
+                            px_per_mm=17.0,
+                        )
 
         # Verify function calls
         mock_wandb_init.assert_called_once()

@@ -99,7 +99,7 @@ class TestLogToWandb:
             mode="online",
         )
 
-        mock_run.config.update.assert_called_once_with(
+        mock_wandb_config.update.assert_called_once_with(
             {"version": "1", "config_path": config_path.as_posix()}
         )
 
@@ -327,7 +327,7 @@ class TestUpdateConfigWithWandb:
             "model.backbone.type": "resnet50",
             "training.batch_size": 32,
         }
-        mock_wandb_config.__bool__ = lambda: True
+        mock_wandb_config.__bool__ = lambda self: True
         mock_wandb_config.__iter__ = lambda: iter(mock_config_dict.items())
         mock_wandb_config.items = lambda: mock_config_dict.items()
         # Mock dict() constructor call
