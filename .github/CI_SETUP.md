@@ -1,6 +1,6 @@
 # CI/CD Setup Guide
 
-This document explains our continuous integration setup, Python version strategy, and automated debugging system.
+This document explains our continuous integration setup, and Python version strategy.
 
 ## Overview
 
