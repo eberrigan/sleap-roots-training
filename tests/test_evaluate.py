@@ -151,12 +151,14 @@ class TestGetPredictions:
     @patch("sleap_roots_training.evaluate.sleap.load_model")
     @patch("sleap_roots_training.evaluate.sleap.load_file")
     @patch("sleap_roots_training.evaluate.Path.exists")
-    def test_get_predictions_existing_file(self, mock_exists, mock_load_file, mock_load_model):
+    def test_get_predictions_existing_file(
+        self, mock_exists, mock_load_file, mock_load_model
+    ):
         """Test getting predictions for existing file."""
         mock_exists.return_value = True
         mock_predictions = MagicMock()
         mock_load_file.return_value = mock_predictions
-        
+
         # Mock the predictor
         mock_predictor = MagicMock()
         mock_load_model.return_value = mock_predictor

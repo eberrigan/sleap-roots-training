@@ -542,7 +542,9 @@ class TestMainFunction:
     @patch("sleap_roots_training.train.Path.exists")
     @patch("sleap_roots_training.train.CONFIG")
     @patch("sleap_roots_training.train.load_training_data")
-    def test_main_sweep_without_config(self, mock_load_data, mock_config, mock_exists, mock_file):
+    def test_main_sweep_without_config(
+        self, mock_load_data, mock_config, mock_exists, mock_file
+    ):
         """Test main function with sweep but no sweep config."""
         # Setup mocks
         mock_config.__getitem__.side_effect = lambda key: {
@@ -554,7 +556,7 @@ class TestMainFunction:
 
         mock_df = pd.DataFrame({"version": [1], "path": ["/path/to/v1/config.json"]})
         mock_load_data.return_value = mock_df
-        
+
         # Mock file existence to avoid FileNotFoundError
         mock_exists.return_value = True
 

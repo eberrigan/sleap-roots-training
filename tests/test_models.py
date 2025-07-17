@@ -127,9 +127,7 @@ class TestFetchModelArtifactFromExperiment:
                 "Fetched artifact 'test_artifact:latest' to directory '/path/to/artifact'.",
             ),
         ]
-        mock_print.assert_has_calls(
-            [call(*args) for args in expected_calls]
-        )
+        mock_print.assert_has_calls([call(*args) for args in expected_calls])
 
 
 class TestFetchModelArtifactAndLinkToRegistry:
@@ -218,9 +216,7 @@ class TestFetchModelArtifactAndLinkToRegistry:
                 "Linked artifact 'test_artifact:latest' to registry 'test_entity-org/wandb-registry-test_registry/test_collection'.",
             ),
         ]
-        mock_print.assert_has_calls(
-            [call(*args) for args in expected_calls]
-        )
+        mock_print.assert_has_calls([call(*args) for args in expected_calls])
 
 
 class TestPromoteModelInRegistry:
