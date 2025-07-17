@@ -13,11 +13,11 @@ def check_python_version():
     """Check if Python version is compatible."""
     print(f"Python version: {sys.version}")
     major, minor = sys.version_info[:2]
-    if major == 3 and minor == 8:
+    if major == 3 and 7 <= minor <= 9:
         print("[OK] Python version compatible")
         return True
     else:
-        print("[ERROR] Python version not compatible (requires 3.8 for SLEAP)")
+        print("[ERROR] Python version not compatible (requires Python 3.7-3.9 for SLEAP)")
         return False
 
 def check_sleap_installation():

@@ -19,18 +19,21 @@ A Python package for training and evaluating SLEAP models for root tracking, wit
 
 ### Prerequisites
 
-1. **Python 3.8**: This package requires Python 3.8 for compatibility with SLEAP PyPI installations  
+1. **Python 3.7-3.9**: This package supports Python 3.7-3.9 to work with all SLEAP environments
 2. **SLEAP Environment**: Install SLEAP following the [official guide](https://sleap.ai/installation.html)
 3. **Weights & Biases**: Sign up for a [W&B account](https://wandb.ai)
 
 ### Python Version Strategy
 
-This package uses **Python 3.8** to ensure compatibility with both installation methods:
+This package supports **Python 3.7-3.9** to work with all SLEAP installation methods:
 
-- **PyPI SLEAP** (`sleap[pypi]==1.4.1`) → Requires Python 3.8
-- **Conda SLEAP** (`sleap=1.4.1`) → Requires Python 3.9
+- **Windows Conda SLEAP** → Installs Python 3.7
+- **Linux/macOS Conda SLEAP** → May install Python 3.8 or 3.9
+- **PyPI SLEAP** → Works with Python 3.8+
 
-We standardize on Python 3.8 since it works with the PyPI version and provides the widest compatibility for CI/CD pipelines.
+**For Local Development**: Follow the official SLEAP installation instructions for your platform - the package will work with whatever Python version SLEAP provides.
+
+**For CI/CD**: We use Python 3.8 with PyPI SLEAP to avoid CUDA dependencies and ensure consistent cross-platform testing.
 
 ### Quick Setup
 
@@ -201,9 +204,9 @@ The project uses streamlined GitHub Actions workflows for comprehensive testing:
 
 ### Why This Setup?
 
-- **Python 3.8**: Ensures compatibility with PyPI SLEAP version used in CI
-- **PyPI SLEAP**: Avoids CUDA dependency conflicts in GitHub Actions runners
-- **Conda locally**: Developers use conda for full GPU support and dependencies
+- **Python 3.8 in CI**: Technical choice to work with PyPI SLEAP and avoid CUDA dependencies in GitHub Actions
+- **PyPI SLEAP in CI**: Avoids CUDA dependency conflicts in GitHub Actions runners
+- **Conda locally**: Developers use conda for full GPU support and dependencies (any Python 3.7-3.9)
 - **Streamlined workflows**: Fast feedback with comprehensive coverage
 
 All workflows run on every push and pull request to ensure code quality.
