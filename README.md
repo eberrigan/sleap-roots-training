@@ -1,8 +1,6 @@
 # sleap-roots-training
 
-[![Branch Checks](https://github.com/eberrigan/sleap-roots-training/workflows/Branch%20Checks/badge.svg)](https://github.com/eberrigan/sleap-roots-training/actions/workflows/branch-checks.yml)
 [![Test Imports](https://github.com/eberrigan/sleap-roots-training/workflows/Test%20Imports/badge.svg)](https://github.com/eberrigan/sleap-roots-training/actions/workflows/test-imports.yml)
-[![CI with Conda](https://github.com/eberrigan/sleap-roots-training/workflows/CI%20with%20Conda/badge.svg)](https://github.com/eberrigan/sleap-roots-training/actions/workflows/ci-conda.yml)
 [![CI](https://github.com/eberrigan/sleap-roots-training/workflows/CI/badge.svg)](https://github.com/eberrigan/sleap-roots-training/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/eberrigan/sleap-roots-training/branch/main/graph/badge.svg)](https://codecov.io/gh/eberrigan/sleap-roots-training)
 
@@ -21,9 +19,21 @@ A Python package for training and evaluating SLEAP models for root tracking, wit
 
 ### Prerequisites
 
-1. **Python 3.8**: SLEAP requires Python 3.8 (3.9 has compatibility issues)
+1. **Python 3.7-3.9**: This package supports Python 3.7-3.9 to work with all SLEAP environments
 2. **SLEAP Environment**: Install SLEAP following the [official guide](https://sleap.ai/installation.html)
 3. **Weights & Biases**: Sign up for a [W&B account](https://wandb.ai)
+
+### Python Version Strategy
+
+This package supports **Python 3.7-3.9** to work with all SLEAP installation methods:
+
+- **Windows Conda SLEAP** → Installs Python 3.7
+- **Linux/macOS Conda SLEAP** → May install Python 3.8 or 3.9
+- **PyPI SLEAP** → Works with Python 3.8+
+
+**For Local Development**: Follow the official SLEAP installation instructions for your platform - the package will work with whatever Python version SLEAP provides.
+
+**For CI/CD**: We use Python 3.8 with PyPI SLEAP to avoid CUDA dependencies and ensure consistent cross-platform testing.
 
 ### Quick Setup
 
@@ -41,10 +51,12 @@ conda create -y -n sleap -c conda-forge -c anaconda -c sleap sleap=1.4.1
 conda activate sleap
 ```
 
-**PyPI (alternative):**
+**PyPI (CI/Testing):**
 ```bash
 pip install sleap[pypi]==1.4.1
 ```
+
+> **Note**: For local development, use conda installation. PyPI version is primarily used in CI/CD environments.
 
 #### Step 2: Install this package
 
@@ -171,12 +183,31 @@ The repository includes Jupyter notebooks for interactive experimentation:
 
 ## CI/CD
 
-The project uses multiple GitHub Actions workflows for comprehensive testing:
+The project uses streamlined GitHub Actions workflows for comprehensive testing:
 
-- **Branch Checks**: Fast validation (formatting, imports, basic tests)
-- **Test Imports**: Cross-platform compatibility testing
-- **CI with Conda**: SLEAP integration testing with conda
-- **CI**: Full integration testing with comprehensive coverage
+### Current Workflows
+
+1. **Test Imports** (`test-imports.yml`)
+   - **Purpose**: Fast cross-platform import testing
+   - **Runs on**: All platforms (Ubuntu, Windows, macOS)
+   - **Python**: 3.8
+   - **SLEAP**: PyPI version
+   - **Triggers**: Every push and PR
+
+2. **CI** (`ci.yml`)
+   - **Purpose**: Full integration testing with coverage
+   - **Runs on**: Ubuntu (primary)
+   - **Python**: 3.8
+   - **SLEAP**: PyPI version
+   - **Features**: Comprehensive test suite, code coverage (80% threshold), linting, building
+   - **Triggers**: Every push and PR
+
+### Why This Setup?
+
+- **Python 3.8 in CI**: Technical choice to work with PyPI SLEAP and avoid CUDA dependencies in GitHub Actions
+- **PyPI SLEAP in CI**: Avoids CUDA dependency conflicts in GitHub Actions runners
+- **Conda locally**: Developers use conda for full GPU support and dependencies (any Python 3.7-3.9)
+- **Streamlined workflows**: Fast feedback with comprehensive coverage
 
 All workflows run on every push and pull request to ensure code quality.
 
