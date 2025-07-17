@@ -7,7 +7,7 @@ authors = [
 description = "Wrapper around SLEAP and WandB for training."
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.7"
+requires-python = ">=3.8,<3.9"
 dependencies = [
     "sleap",
     "wandb",
@@ -32,7 +32,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["toml", "twine", "build", "pytest", "black"]
+dev = ["toml", "twine", "build", "pytest", "pytest-cov", "pytest-mock", "black", "coverage[toml]"]
 
 [project.urls]
 Homepage = "https://github.com/eberrigan/sleap-roots-training"
@@ -42,7 +42,67 @@ Issues = "https://github.com/eberrigan/sleap-roots-training/issues"
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.packages.find]
-where = [""]
-include = ["sleap_roots_training*"]
-exclude = ["helper_functions", "tests", "helper_functions.*", "tests.*"]
+[tool.setuptools]
+packages = ["sleap_roots_training"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    "--cov=sleap_roots_training",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-report=xml:coverage.xml",
+    "--cov-fail-under=80",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["sleap_roots_training"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "setup.py",
+    "*/venv/*",
+    "*/virtualenv/*",
+    "*/.tox/*",
+    "*/.pytest_cache/*",
+    "*/site-packages/*",
+    "*/__pycache__/*",
+]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+    "except ImportError:",
+]
+show_missing = true
+precision = 2
+
+[tool.coverage.html]
+directory = "htmlcov"

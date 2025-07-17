@@ -1,0 +1,130 @@
+name: Test Imports
+
+on:
+  push:
+    branches: [ "**" ]  # Run on all branches
+  pull_request:
+    branches: [ "**" ]  # Run on PRs to any branch
+  schedule:
+    # Run daily at 02:00 UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  test-imports:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.8"]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install package
+      run: |
+        python -m pip install --upgrade pip
+        # Install SLEAP via PyPI for import testing
+        pip install sleap[pypi]==1.4.1
+        # Install our package with dev dependencies
+        pip install -e .[dev]
+    
+    - name: Test basic imports
+      run: |
+        python -c "
+        import sleap_roots_training
+        print('[OK] sleap_roots_training imported successfully')
+        
+        import sleap_roots_training.config
+        print('[OK] sleap_roots_training.config imported successfully')
+        
+        import sleap_roots_training.train  
+        print('[OK] sleap_roots_training.train imported successfully')
+        
+        import sleap_roots_training.evaluate
+        print('[OK] sleap_roots_training.evaluate imported successfully')
+        
+        import sleap_roots_training.models
+        print('[OK] sleap_roots_training.models imported successfully')
+        
+        import sleap_roots_training.datasets
+        print('[OK] sleap_roots_training.datasets imported successfully')
+        
+        print('[SUCCESS] All imports successful!')
+        "
+    
+    - name: Test configuration loading
+      run: |
+        python -c "
+        from sleap_roots_training.config import load_config, DEFAULT_CONFIG
+        config = load_config()
+        print('[OK] Configuration loaded successfully')
+        print('Project name: ' + config.get('project_name', 'Not set'))
+        "
+    
+    - name: Test package exclusions
+      run: |
+        python -c "
+        import sys
+        import pkgutil
+        
+        # Check that helper_functions is not in our package
+        helper_found = False
+        tests_in_package = False
+        
+        try:
+            import helper_functions
+            # Check if it's from our package directory
+            if hasattr(helper_functions, '__file__') and 'sleap-roots-training' in str(helper_functions.__file__):
+                helper_found = True
+                print('[ERROR] helper_functions found in our package')
+            else:
+                print('[OK] helper_functions not from our package (system module ok)')
+        except ImportError:
+            print('[OK] helper_functions correctly excluded')
+        
+        # Check if tests module is part of our installed package
+        try:
+            import sleap_roots_training
+            package_path = sleap_roots_training.__path__[0] if hasattr(sleap_roots_training, '__path__') else ''
+            
+            # Check if tests is a submodule of our package
+            for importer, modname, ispkg in pkgutil.iter_modules([package_path]):
+                if modname == 'tests':
+                    tests_in_package = True
+                    break
+            
+            if tests_in_package:
+                print('[ERROR] tests module found in sleap_roots_training package')
+            else:
+                print('[OK] tests module correctly excluded from package')
+                
+        except Exception as e:
+            print(f'[WARNING] Could not check package contents: {e}')
+        
+        # Only fail if we actually found excluded modules in our package
+        if helper_found or tests_in_package:
+            print('[FAIL] Package exclusion test failed!')
+            sys.exit(1)
+        else:
+            print('[SUCCESS] Package exclusions working correctly!')
+        "
+    
+    - name: Test package metadata
+      run: |
+        python -c "
+        import sleap_roots_training
+        print(f'Package file: {sleap_roots_training.__file__}')
+        
+        # Check if package has __version__ attribute
+        if hasattr(sleap_roots_training, '__version__'):
+            print(f'Version: {sleap_roots_training.__version__}')
+        else:
+            print('No version attribute found')
+        
+        print('[OK] Package metadata accessible')
+        "
