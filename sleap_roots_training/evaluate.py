@@ -993,7 +993,7 @@ def evaluate_model(
         run.finish()
 
         # Return safe empty objects
-        return sleap.Labels() if hasattr(sleap, "Labels") else {}, {}
+        return sleap.Labels() if hasattr(sleap, "Labels") else {}, {}, {}
 
     finally:
         run.finish()
