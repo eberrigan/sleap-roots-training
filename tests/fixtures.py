@@ -20,10 +20,10 @@ from sleap_roots_training.train import load_training_data
 def sweep_experiment_data():
     """
     Fixture providing real sweep experiment data for integration tests.
-    
+
     This fixture loads the actual SLEAP experiment data from the test data directory,
     including CSV files, configuration files, and SLEAP package files.
-    
+
     Returns:
         dict: Dictionary containing paths and data for the sweep experiment:
             - csv_path: Path to the train_test_splits.csv file
@@ -35,24 +35,26 @@ def sweep_experiment_data():
     """
     # Path to test data directory
     test_data_dir = Path(__file__).parent / "data" / "sweep_experiment"
-    
+
     # Load the CSV data
     csv_path = test_data_dir / "train_test_splits.csv"
     df = load_training_data(csv_path)
-    
+
     # Get the config path
-    config_path = test_data_dir / "train_test_split.v000" / "initial_config_modified_v000.json"
-    
+    config_path = (
+        test_data_dir / "train_test_split.v000" / "initial_config_modified_v000.json"
+    )
+
     # Load the configuration
-    with open(config_path, 'r') as f:
+    with open(config_path, "r") as f:
         config = json.load(f)
-    
+
     # Update paths to use local test data with proper path separators
     local_data_dir = test_data_dir / "train_test_split.v000"
     config["data"]["labels"]["training_labels"] = str(local_data_dir / "train.pkg.slp")
     config["data"]["labels"]["validation_labels"] = str(local_data_dir / "val.pkg.slp")
     config["data"]["labels"]["test_labels"] = str(local_data_dir / "test.pkg.slp")
-    
+
     return {
         "csv_path": csv_path,
         "config_path": config_path,
@@ -67,14 +69,14 @@ def sweep_experiment_data():
 def temp_experiment_dir(sweep_experiment_data):
     """
     Create a temporary directory with copied experiment data for safe testing.
-    
+
     This fixture creates a temporary directory and copies the sweep experiment data
     to it, ensuring that tests don't modify the original test data. All paths are
     updated to use forward slashes for cross-platform compatibility.
-    
+
     Args:
         sweep_experiment_data: The base sweep experiment data fixture
-        
+
     Yields:
         dict: Dictionary containing paths to the temporary experiment data:
             - experiment_dir: Path to the temporary experiment directory
@@ -85,15 +87,15 @@ def temp_experiment_dir(sweep_experiment_data):
     """
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
-        
+
         # Copy the experiment data to temp directory
         experiment_dir = temp_path / "sweep_experiment"
         shutil.copytree(sweep_experiment_data["test_data_dir"], experiment_dir)
-        
+
         # Update the CSV to point to the temporary directory
         csv_path = experiment_dir / "train_test_splits.csv"
         df = pd.read_csv(csv_path)
-        
+
         # Update paths in CSV to point to temp directory with forward slashes
         # Replace Windows network paths with local temp paths
         for idx, row in df.iterrows():
@@ -104,24 +106,36 @@ def temp_experiment_dir(sweep_experiment_data):
             new_path = experiment_dir / "train_test_split.v000" / filename
             # Convert to string with forward slashes for cross-platform compatibility
             df.at[idx, "path"] = str(new_path).replace("\\", "/")
-        
+
         df.to_csv(csv_path, index=False)
-        
+
         # Update config file paths
-        config_path = experiment_dir / "train_test_split.v000" / "initial_config_modified_v000.json"
-        with open(config_path, 'r') as f:
+        config_path = (
+            experiment_dir
+            / "train_test_split.v000"
+            / "initial_config_modified_v000.json"
+        )
+        with open(config_path, "r") as f:
             config = json.load(f)
-        
+
         local_data_dir = experiment_dir / "train_test_split.v000"
         # Use forward slashes for cross-platform compatibility
-        config["data"]["labels"]["training_labels"] = str(local_data_dir / "train.pkg.slp").replace("\\", "/")
-        config["data"]["labels"]["validation_labels"] = str(local_data_dir / "val.pkg.slp").replace("\\", "/")
-        config["data"]["labels"]["test_labels"] = str(local_data_dir / "test.pkg.slp").replace("\\", "/")
-        config["outputs"]["runs_folder"] = str(local_data_dir / "models").replace("\\", "/")
-        
-        with open(config_path, 'w') as f:
+        config["data"]["labels"]["training_labels"] = str(
+            local_data_dir / "train.pkg.slp"
+        ).replace("\\", "/")
+        config["data"]["labels"]["validation_labels"] = str(
+            local_data_dir / "val.pkg.slp"
+        ).replace("\\", "/")
+        config["data"]["labels"]["test_labels"] = str(
+            local_data_dir / "test.pkg.slp"
+        ).replace("\\", "/")
+        config["outputs"]["runs_folder"] = str(local_data_dir / "models").replace(
+            "\\", "/"
+        )
+
+        with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
-        
+
         yield {
             "experiment_dir": experiment_dir,
             "csv_path": csv_path,
@@ -135,10 +149,10 @@ def temp_experiment_dir(sweep_experiment_data):
 def realistic_sweep_config():
     """
     Fixture providing a realistic sweep configuration for medicago experiments.
-    
+
     This fixture returns a W&B sweep configuration that matches the parameters
     typically used in SLEAP roots training experiments.
-    
+
     Returns:
         dict: W&B sweep configuration dictionary with realistic parameters
     """
@@ -150,7 +164,7 @@ def realistic_sweep_config():
             "model.backbone.unet.filters": {"values": [24, 32]},
             "optimization.batch_size": {"values": [2, 4]},
             "optimization.initial_learning_rate": {"values": [0.0001, 0.001]},
-        }
+        },
     }
 
 
@@ -158,10 +172,10 @@ def realistic_sweep_config():
 def small_sweep_config():
     """
     Fixture providing a small sweep configuration for faster testing.
-    
+
     This fixture returns a minimal W&B sweep configuration with fewer parameters
     for tests that need to run quickly.
-    
+
     Returns:
         dict: W&B sweep configuration dictionary with minimal parameters
     """
@@ -170,7 +184,7 @@ def small_sweep_config():
         "parameters": {
             "data.preprocessing.input_scaling": {"values": [0.5, 1.0]},
             "optimization.batch_size": {"values": [2, 4]},
-        }
+        },
     }
 
 
@@ -178,35 +192,35 @@ def small_sweep_config():
 def mock_models_dir(tmp_path):
     """
     Fixture providing a mock models directory structure for testing.
-    
+
     This fixture creates a temporary directory structure that mimics the
     output of SLEAP training runs for testing model discovery and evaluation.
-    
+
     Args:
         tmp_path: pytest's tmp_path fixture
-        
+
     Returns:
         Path: Path to the mock models directory
     """
     models_dir = tmp_path / "models"
     models_dir.mkdir()
-    
+
     # Create mock run directories with timestamps
     run_dirs = [
         "run_241201_120000",  # oldest
         "run_241201_140000",  # newest
         "run_241201_100000",  # middle
     ]
-    
+
     for run_dir in run_dirs:
         run_path = models_dir / run_dir
         run_path.mkdir()
-        
+
         # Create mock training files
         (run_path / "training_config.json").write_text('{"test": "config"}')
         (run_path / "model.h5").write_text("mock model")
         (run_path / "metrics.json").write_text('{"test": "metrics"}')
-    
+
     return models_dir
 
 
@@ -214,10 +228,10 @@ def mock_models_dir(tmp_path):
 def environment_config():
     """
     Fixture providing environment configuration for testing.
-    
+
     This fixture returns configuration values that can be used to set up
     test environments consistently.
-    
+
     Returns:
         dict: Environment configuration dictionary
     """

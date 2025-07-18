@@ -497,7 +497,12 @@ class TestMakeSweepTrainFn:
     @patch("sleap_roots_training.train.execute_training")
     @patch("builtins.open", new_callable=mock_open, read_data='{"test": "config"}')
     def test_make_sweep_train_fn_training_failure(
-        self, mock_file, mock_execute_training, mock_update_config, mock_wandb_init, mock_wandb_config
+        self,
+        mock_file,
+        mock_execute_training,
+        mock_update_config,
+        mock_wandb_init,
+        mock_wandb_config,
     ):
         """Test sweep training function handles training failure."""
         # Setup mocks
@@ -654,7 +659,10 @@ class TestRunSweepTraining:
         mock_train_fn = MagicMock()
         mock_make_sweep_train_fn.return_value = mock_train_fn
 
-        sweep_config = {"method": "random", "parameters": {"param1": {"values": [1, 2]}}}
+        sweep_config = {
+            "method": "random",
+            "parameters": {"param1": {"values": [1, 2]}},
+        }
 
         # Execute sweep training with registry
         run_sweep_training(
