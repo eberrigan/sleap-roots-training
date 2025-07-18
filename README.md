@@ -199,7 +199,9 @@ The project uses streamlined GitHub Actions workflows for comprehensive testing:
    - **Runs on**: Ubuntu (primary)
    - **Python**: 3.8
    - **SLEAP**: PyPI version
-   - **Features**: Comprehensive test suite, code coverage (80% threshold), linting, building
+   - **Jobs**: 
+     - **test**: Testing, linting, coverage (80% threshold), Codecov upload
+     - **build**: Package building and validation
    - **Triggers**: Every push and PR
 
 ### Why This Setup?
