@@ -253,7 +253,7 @@ def update_config_with_wandb(config: dict) -> dict:
         wandb_sweep_params = dict(wandb.config)
 
         logging.info(
-            "Original Parameters: %s", json.dumps(wandb_sweep_params, indent=4)
+            "WandB Config Parameters: %s", json.dumps(wandb_sweep_params, indent=4)
         )
 
         for key, value in wandb_sweep_params.items():
