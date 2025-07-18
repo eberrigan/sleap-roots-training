@@ -57,11 +57,17 @@ strategy:
 
 **Purpose**: Comprehensive integration testing with coverage
 
-**Features**:
-- **Testing**: Full pytest suite with 80% coverage threshold
-- **Linting**: Code formatting checks with black
-- **Building**: Package building and validation
-- **Coverage**: Upload to Codecov with detailed reporting
+**Jobs**:
+1. **test**: Full testing pipeline
+   - Install SLEAP PyPI + package with dev dependencies
+   - Run linting with black
+   - Run pytest with coverage
+   - Upload coverage to Codecov
+   - Check 80% coverage threshold
+2. **build**: Package building and validation
+   - Build wheel and sdist
+   - Validate with twine
+   - Upload build artifacts
 
 **Dependencies**:
 ```bash
