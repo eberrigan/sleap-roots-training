@@ -593,12 +593,8 @@ def make_sweep_train_fn(
 
     def train() -> None:
         """Training function executed by wandb.agent for each sweep run."""
-        # wandb.init is automatically called by the sweep agent
-        run = wandb.run
-        if run is None:
-            raise RuntimeError(
-                "wandb.run is None - sweep agent failed to initialize run"
-            )
+        # Initialize wandb run for this sweep iteration
+        run = wandb.init()
 
         try:
             # Update config with sweep parameters
