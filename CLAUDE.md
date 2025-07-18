@@ -165,12 +165,47 @@ make test-imports  # Test imports only
 ### Test Structure
 
 - `tests/test_config.py` - Configuration management tests
-- `tests/test_train.py` - Training workflow tests
+- `tests/test_train.py` - Training workflow tests (unit tests with mocking)
+- `tests/test_sweep_integration.py` - Sweep integration tests with real data
 - `tests/test_evaluate.py` - Evaluation and metrics tests
 - `tests/test_models.py` - Model artifact management tests
 - `tests/test_datasets.py` - Dataset artifact tests
 - `tests/test_imports.py` - Basic import verification
 - `tests/conftest.py` - Shared fixtures and test configuration
+- `tests/fixtures.py` - Reusable test fixtures for real data
+- `tests/data/` - Real test data including SLEAP experiment files
+
+### Test Fixtures
+
+**Reusable fixtures are defined in `tests/fixtures.py` for use across all test modules:**
+
+- `sweep_experiment_data` - Real SLEAP experiment data with CSV, config, and SLEAP files
+- `temp_experiment_dir` - Temporary copy of experiment data for safe testing
+- `realistic_sweep_config` - Full W&B sweep configuration with multiple parameters
+- `small_sweep_config` - Minimal sweep configuration for faster testing
+- `mock_models_dir` - Mock directory structure for testing model discovery
+- `environment_config` - Test environment configuration values
+
+**Usage in tests:**
+```python
+# Import fixtures at top of test file
+from tests.fixtures import sweep_experiment_data, temp_experiment_dir
+
+# Use fixtures in test functions
+def test_my_function(sweep_experiment_data, temp_experiment_dir):
+    # Access real SLEAP data
+    config = sweep_experiment_data["config"]
+    df = sweep_experiment_data["df"]
+    
+    # Use temporary directory for safe testing
+    temp_config = temp_experiment_dir["config"]
+    temp_csv = temp_experiment_dir["csv_path"]
+```
+
+**Cross-platform compatibility:**
+- All fixtures handle Windows/Linux/macOS path differences
+- Use forward slashes in paths to avoid Windows backslash issues
+- Temporary directories are automatically cleaned up after tests
 
 ### Test Coverage
 
@@ -178,6 +213,19 @@ make test-imports  # Test imports only
 - Minimum coverage threshold: 80%
 - Coverage reports generated in HTML format (`htmlcov/`)
 - XML coverage reports for CI integration (`coverage.xml`)
+
+### Test Categories
+
+**Unit Tests (`test_train.py`):**
+- Comprehensive mocking of external dependencies
+- Fast execution with isolated testing
+- Tests individual function behavior
+
+**Integration Tests (`test_sweep_integration.py`):**
+- Uses real SLEAP experiment data from `tests/data/`
+- Two classes: `TestSweepIntegrationWithMocks` and `TestPureIntegration`
+- Tests actual workflow with minimal or no mocking
+- Verifies cross-platform compatibility and path handling
 
 ### CI/CD Integration
 
