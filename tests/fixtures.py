@@ -55,7 +55,7 @@ def sweep_experiment_data():
     # Update paths to use local test data with proper path separators
     local_data_dir = test_data_dir / "train_test_split.v000"
     local_data_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Create mock SLEAP files if they don't exist (to avoid large file issues)
     slp_files = ["train.pkg.slp", "val.pkg.slp", "test.pkg.slp"]
     for slp_file in slp_files:
@@ -128,7 +128,7 @@ def temp_experiment_dir(sweep_experiment_data):
             / "train_test_split.v000"
             / "initial_config_modified_v000.json"
         )
-        
+
         # Load config if it exists, otherwise use the config from sweep_experiment_data
         if config_path.exists():
             with open(config_path, "r") as f:
