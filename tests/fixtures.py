@@ -113,8 +113,13 @@ def temp_experiment_dir(sweep_experiment_data):
         # Replace Windows network paths with local temp paths
         for idx, row in df.iterrows():
             old_path = row["path"]
-            # Extract the filename from the original path
-            filename = Path(old_path).name
+            # Extract just the filename (e.g., "train.pkg.slp") from the network path
+            if "\\" in old_path:
+                # Handle Windows UNC paths
+                filename = old_path.split("\\")[-1]
+            else:
+                # Handle regular paths
+                filename = Path(old_path).name
             # Create new path in temp directory
             new_path = experiment_dir / "train_test_split.v000" / filename
             # Convert to string with forward slashes for cross-platform compatibility
