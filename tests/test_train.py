@@ -358,7 +358,9 @@ class TestEvaluateModelAndGenerateVisuals:
 
             # Check distances DataFrame - should be in pixels
             assert len(dists_df) == 4  # Flattened array
-            assert "distances_px" in dists_df.columns  # Column name should indicate pixels
+            assert (
+                "distances_px" in dists_df.columns
+            )  # Column name should indicate pixels
 
             mock_load_metrics.assert_called_once_with(
                 model_dir.as_posix(), split="test"

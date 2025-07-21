@@ -198,7 +198,7 @@ def evaluate_model_and_generate_visuals(model_dir, px_per_mm=None):
         dist_p99 = metrics["dist.p99"]
         dist_avg = metrics["dist.avg"]
         dist_std = np.nanstd(metrics["dist.dists"].flatten())
-    
+
     metrics_summary = {
         "model_path": model_dir_str,
         "model_name": model_dir.name,
