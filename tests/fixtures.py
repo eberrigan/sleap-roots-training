@@ -19,10 +19,10 @@ from sleap_roots_training.train import load_training_data
 @pytest.fixture
 def sweep_experiment_data():
     """
-    Fixture providing real sweep experiment data for integration tests.
+    Fixture providing sweep experiment data for integration tests.
 
-    This fixture loads the actual SLEAP experiment data from the test data directory,
-    including CSV files, configuration files, and SLEAP package files.
+    This fixture loads the real CSV and JSON config files, but creates mock SLEAP
+    package files to avoid large file size issues in GitHub.
 
     Returns:
         dict: Dictionary containing paths and data for the sweep experiment:
@@ -45,12 +45,25 @@ def sweep_experiment_data():
         test_data_dir / "train_test_split.v000" / "initial_config_modified_v000.json"
     )
 
-    # Load the configuration
+    # Create the directory if it doesn't exist
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Load the real configuration file
     with open(config_path, "r") as f:
         config = json.load(f)
 
     # Update paths to use local test data with proper path separators
     local_data_dir = test_data_dir / "train_test_split.v000"
+    local_data_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Create mock SLEAP files if they don't exist (to avoid large file issues)
+    slp_files = ["train.pkg.slp", "val.pkg.slp", "test.pkg.slp"]
+    for slp_file in slp_files:
+        slp_path = local_data_dir / slp_file
+        if not slp_path.exists():
+            # Create a small mock SLEAP file
+            slp_path.write_text(f"Mock SLEAP file: {slp_file}")
+
     config["data"]["labels"]["training_labels"] = str(local_data_dir / "train.pkg.slp")
     config["data"]["labels"]["validation_labels"] = str(local_data_dir / "val.pkg.slp")
     config["data"]["labels"]["test_labels"] = str(local_data_dir / "test.pkg.slp")
@@ -115,8 +128,16 @@ def temp_experiment_dir(sweep_experiment_data):
             / "train_test_split.v000"
             / "initial_config_modified_v000.json"
         )
-        with open(config_path, "r") as f:
-            config = json.load(f)
+        
+        # Load config if it exists, otherwise use the config from sweep_experiment_data
+        if config_path.exists():
+            with open(config_path, "r") as f:
+                config = json.load(f)
+        else:
+            # Use the config from sweep_experiment_data and create the file
+            config = sweep_experiment_data["config"].copy()
+            with open(config_path, "w") as f:
+                json.dump(config, f, indent=2)
 
         local_data_dir = experiment_dir / "train_test_split.v000"
         # Use forward slashes for cross-platform compatibility
