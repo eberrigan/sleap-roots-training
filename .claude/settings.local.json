@@ -12,7 +12,8 @@
       "Bash(pip install:*)",
       "Bash(pip uninstall:*)",
       "Bash(mamba activate:*)",
-      "Bash(black:*)"
+      "Bash(black:*)",
+      "Bash(. /c/Users/Elizabeth/miniforge3/etc/profile.d/conda.sh)"
     ],
     "deny": []
   }
