@@ -14,7 +14,8 @@
       "Bash(mamba activate:*)",
       "Bash(black:*)",
       "Bash(. /c/Users/Elizabeth/miniforge3/etc/profile.d/conda.sh)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(/c/Users/Elizabeth/miniforge3/etc/profile.d/conda.sh)"
     ],
     "deny": []
   }
