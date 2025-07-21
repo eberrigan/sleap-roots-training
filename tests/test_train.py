@@ -477,8 +477,8 @@ class TestMakeSweepTrainFn:
         # Execute the training function
         train_fn()
 
-        # Verify wandb.init was called
-        mock_wandb_init.assert_called_once()
+        # Verify wandb.init was called with group parameter
+        mock_wandb_init.assert_called_once_with(group="test_experiment")
 
         # Verify config was updated
         mock_update_config.assert_called_once_with({"original": "config"})
@@ -529,8 +529,8 @@ class TestMakeSweepTrainFn:
         with pytest.raises(Exception, match="Training failed"):
             train_fn()
 
-        # Verify wandb.init was still called
-        mock_wandb_init.assert_called_once()
+        # Verify wandb.init was still called with group parameter
+        mock_wandb_init.assert_called_once_with(group="test_experiment")
 
     @patch("sleap_roots_training.train.wandb.config")
     @patch("sleap_roots_training.train.wandb.init")

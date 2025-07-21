@@ -594,7 +594,7 @@ def make_sweep_train_fn(
     def train() -> None:
         """Training function executed by wandb.agent for each sweep run."""
         # Initialize wandb run for this sweep iteration
-        run = wandb.init()
+        run = wandb.init(group=experiment_name)
 
         try:
             # Update config with sweep parameters

@@ -155,8 +155,8 @@ class TestSweepIntegrationWithMocks:
             # Execute the training function
             train_fn()
 
-        # Verify that wandb.init was called
-        mock_wandb_init.assert_called_once()
+        # Verify that wandb.init was called with group parameter
+        mock_wandb_init.assert_called_once_with(group=environment_config["experiment_name"])
 
         # Verify that execute_training was called with a config file
         mock_execute_training.assert_called_once()
