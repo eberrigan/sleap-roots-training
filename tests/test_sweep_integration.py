@@ -114,13 +114,25 @@ class TestSweepIntegrationWithMocks:
         mock_wandb_init.return_value = mock_run
 
         # Mock wandb.config with realistic sweep parameters
+        mock_config_dict = {
+            "data.preprocessing.input_scaling": 1.5,
+            "model.backbone.unet.max_stride": 32,
+            "optimization.batch_size": 2,
+            "optimization.initial_learning_rate": 0.001,
+        }
+
+        # Configure mock to behave like a dict when converted with dict()
         mock_wandb_config.__bool__ = lambda self: True
-        mock_wandb_config.items.return_value = [
-            ("data.preprocessing.input_scaling", 1.5),
-            ("model.backbone.unet.max_stride", 32),
-            ("optimization.batch_size", 2),
-            ("optimization.initial_learning_rate", 0.001),
-        ]
+        mock_wandb_config.items.return_value = mock_config_dict.items()
+        mock_wandb_config.keys.return_value = mock_config_dict.keys()
+        mock_wandb_config.values.return_value = mock_config_dict.values()
+        mock_wandb_config.__iter__.return_value = iter(mock_config_dict.items())
+
+        # Make individual key access work
+        def mock_getitem(self, key):
+            return mock_config_dict[key]
+
+        mock_wandb_config.__getitem__ = mock_getitem
 
         # Mock get_latest_run to return a fake model directory
         mock_model_dir = MagicMock()
@@ -131,29 +143,19 @@ class TestSweepIntegrationWithMocks:
         config = temp_experiment_dir["config"]
         data_dir = temp_experiment_dir["data_dir"]
 
-        # Mock dict() constructor call
-        with patch(
-            "builtins.dict",
-            return_value={
-                "data.preprocessing.input_scaling": 1.5,
-                "model.backbone.unet.max_stride": 32,
-                "optimization.batch_size": 2,
-                "optimization.initial_learning_rate": 0.001,
-            },
-        ):
-            train_fn = make_sweep_train_fn(
-                version="0",
-                config_copy=config,
-                dir_path=data_dir,
-                sleap_train_command="sleap-train {}",
-                experiment_name=environment_config["experiment_name"],
-                model_tags=environment_config["model_tags"],
-                link_to_registry=False,
-                registry_name=None,
-            )
+        train_fn = make_sweep_train_fn(
+            version="0",
+            config_copy=config,
+            dir_path=data_dir,
+            sleap_train_command="sleap-train {}",
+            experiment_name=environment_config["experiment_name"],
+            model_tags=environment_config["model_tags"],
+            link_to_registry=False,
+            registry_name=None,
+        )
 
-            # Execute the training function
-            train_fn()
+        # Execute the training function
+        train_fn()
 
         # Verify that wandb.init was called with group parameter
         mock_wandb_init.assert_called_once_with(
@@ -176,42 +178,43 @@ class TestSweepIntegrationWithMocks:
 
         # Mock wandb.config with realistic parameters
         with patch("sleap_roots_training.train.wandb.config") as mock_wandb_config:
+            mock_config_dict = {
+                "data.preprocessing.input_scaling": 1.5,
+                "model.backbone.unet.max_stride": 32,
+                "model.backbone.unet.filters": 32,
+                "optimization.batch_size": 2,
+                "optimization.initial_learning_rate": 0.001,
+            }
+
+            # Configure mock to behave like a dict when converted with dict()
             mock_wandb_config.__bool__ = lambda self: True
-            mock_wandb_config.items.return_value = [
-                ("data.preprocessing.input_scaling", 1.5),
-                ("model.backbone.unet.max_stride", 32),
-                ("model.backbone.unet.filters", 32),
-                ("optimization.batch_size", 2),
-                ("optimization.initial_learning_rate", 0.001),
-            ]
+            mock_wandb_config.items.return_value = mock_config_dict.items()
+            mock_wandb_config.keys.return_value = mock_config_dict.keys()
+            mock_wandb_config.values.return_value = mock_config_dict.values()
+            mock_wandb_config.__iter__.return_value = iter(mock_config_dict.items())
 
-            # Mock dict() constructor call
-            with patch(
-                "builtins.dict",
-                return_value={
-                    "data.preprocessing.input_scaling": 1.5,
-                    "model.backbone.unet.max_stride": 32,
-                    "model.backbone.unet.filters": 32,
-                    "optimization.batch_size": 2,
-                    "optimization.initial_learning_rate": 0.001,
-                },
-            ):
-                # Update config
-                updated_config = update_config_with_wandb(config)
+            # Make individual key access work
+            def mock_getitem(self, key):
+                return mock_config_dict[key]
 
-                # Verify updates
-                assert updated_config["data"]["preprocessing"]["input_scaling"] == 1.5
-                assert updated_config["model"]["backbone"]["unet"]["max_stride"] == 32
-                assert updated_config["model"]["backbone"]["unet"]["filters"] == 32
-                assert updated_config["optimization"]["batch_size"] == 2
-                assert updated_config["optimization"]["initial_learning_rate"] == 0.001
+            mock_wandb_config.__getitem__ = mock_getitem
 
-                # Verify original nested structure is preserved
-                assert "validation_labels" in updated_config["data"]["labels"]
-                assert (
-                    "sigma"
-                    in updated_config["model"]["heads"]["multi_instance"]["confmaps"]
-                )
+            # Update config
+            updated_config = update_config_with_wandb(config)
+
+            # Verify updates
+            assert updated_config["data"]["preprocessing"]["input_scaling"] == 1.5
+            assert updated_config["model"]["backbone"]["unet"]["max_stride"] == 32
+            assert updated_config["model"]["backbone"]["unet"]["filters"] == 32
+            assert updated_config["optimization"]["batch_size"] == 2
+            assert updated_config["optimization"]["initial_learning_rate"] == 0.001
+
+            # Verify original nested structure is preserved
+            assert "validation_labels" in updated_config["data"]["labels"]
+            assert (
+                "sigma"
+                in updated_config["model"]["heads"]["multi_instance"]["confmaps"]
+            )
 
     @patch("sleap_roots_training.train.wandb.sweep")
     @patch("sleap_roots_training.train.wandb.agent")

@@ -380,22 +380,30 @@ class TestUpdateConfigWithWandb:
             "model.backbone.type": "resnet50",
             "training.batch_size": 32,
         }
+        # Configure mock to behave like a dict when converted with dict()
         mock_wandb_config.__bool__ = lambda self: True
-        mock_wandb_config.__iter__ = lambda: iter(mock_config_dict.items())
-        mock_wandb_config.items = lambda: mock_config_dict.items()
-        # Mock dict() constructor call
-        with patch("builtins.dict", return_value=mock_config_dict):
-            original_config = {
-                "data": {"preprocessing": {"input_scaling": 1.0}},
-                "model": {"backbone": {"type": "resnet18"}},
-                "training": {"batch_size": 16},
-            }
+        mock_wandb_config.items.return_value = mock_config_dict.items()
+        mock_wandb_config.keys.return_value = mock_config_dict.keys()
+        mock_wandb_config.values.return_value = mock_config_dict.values()
+        mock_wandb_config.__iter__.return_value = iter(mock_config_dict.items())
 
-            updated_config = update_config_with_wandb(original_config)
+        # Make individual key access work
+        def mock_getitem(self, key):
+            return mock_config_dict[key]
 
-            assert updated_config["data"]["preprocessing"]["input_scaling"] == 0.5
-            assert updated_config["model"]["backbone"]["type"] == "resnet50"
-            assert updated_config["training"]["batch_size"] == 32
+        mock_wandb_config.__getitem__ = mock_getitem
+
+        original_config = {
+            "data": {"preprocessing": {"input_scaling": 1.0}},
+            "model": {"backbone": {"type": "resnet18"}},
+            "training": {"batch_size": 16},
+        }
+
+        updated_config = update_config_with_wandb(original_config)
+
+        assert updated_config["data"]["preprocessing"]["input_scaling"] == 0.5
+        assert updated_config["model"]["backbone"]["type"] == "resnet50"
+        assert updated_config["training"]["batch_size"] == 32
 
     @patch("sleap_roots_training.train.wandb.config")
     def test_update_config_no_wandb_config(self, mock_wandb_config):
