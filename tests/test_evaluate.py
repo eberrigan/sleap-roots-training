@@ -547,6 +547,75 @@ class TestEvaluateModel:
         assert metrics_summary["dist_avg"] == 100.0 / 17.0
         assert metrics_summary["vis_prec"] == 0.95
 
+    @patch("sleap_roots_training.evaluate.wandb.init")
+    @patch("sleap_roots_training.evaluate.fetch_model_artifact")
+    @patch("sleap_roots_training.evaluate.get_test_data")
+    @patch("sleap_roots_training.evaluate.sleap.load_model")
+    @patch("sleap_roots_training.evaluate.sleap.Predictor.predict")
+    def test_evaluate_model_px_per_mm_none(
+        self,
+        mock_predict,
+        mock_load_model,
+        mock_get_test_data,
+        mock_fetch_artifact,
+        mock_wandb_init,
+    ):
+        """Test evaluate_model function with px_per_mm=None (no conversion)."""
+        # Setup mocks
+        mock_run = MagicMock()
+        mock_wandb_init.return_value = mock_run
+
+        mock_artifact = MagicMock()
+        mock_artifact.download.return_value = "test_model_path"
+        mock_fetch_artifact.return_value = mock_artifact
+
+        mock_labels = MagicMock()
+        mock_get_test_data.return_value = mock_labels
+
+        mock_model = MagicMock()
+        mock_load_model.return_value = mock_model
+
+        mock_labels_pr = MagicMock()
+        mock_predict.return_value = mock_labels_pr
+
+        mock_metrics = {
+            "dist.p50": 85.0,
+            "dist.avg": 100.0,
+            "dist.dists": np.array([85.0, 100.0]),
+            "vis.precision": 0.95,
+            "vis.recall": 0.90,
+            "oks_voc.mAP": 0.85,
+            "oks_voc.mAR": 0.80,
+        }
+
+        with patch("sleap_roots_training.evaluate.sleap.Labels.save"):
+            with patch(
+                "sleap_roots_training.evaluate.sleap.Predictor.evaluate",
+                return_value=mock_metrics,
+            ) as mock_eval:
+                mock_eval.return_value = (mock_labels_pr, mock_metrics)
+
+                with patch("sleap_roots_training.evaluate.pd.DataFrame.to_csv"):
+                    with patch("sleap_roots_training.evaluate.plt.savefig"):
+                        with patch("sleap_roots_training.evaluate.plt.close"):
+                            with patch(
+                                "sleap_roots_training.evaluate.wandb.Artifact"
+                            ) as mock_artifact_class:
+                                # Mock the wandb.Artifact constructor to return mock artifacts
+                                mock_artifact_class.return_value = MagicMock()
+                                labels_pr, metrics, metrics_summary = evaluate_model(
+                                    "test_model_artifact",
+                                    "test_test_artifact",
+                                    output_dir="test_output",
+                                    px_per_mm=None,  # Test with None
+                                )
+
+        # Check return values - no conversion should happen
+        assert labels_pr == mock_labels_pr
+        assert metrics == mock_metrics
+        assert metrics_summary["dist_avg"] == 100.0  # No conversion, raw pixel value
+        assert metrics_summary["vis_prec"] == 0.95
+
 
 class TestMainFunction:
     """Test suite for main function."""

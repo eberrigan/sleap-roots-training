@@ -1064,12 +1064,13 @@ def evaluate_model(
             a model directory from a model artifact since associated test sets are saved
             in model artifacts.
         output_dir (str): The directory to save the evaluation results. Default is "output".
-        px_per_mm (float): The number of pixels per millimeter for the dataset. Default is 17.0.
+        px_per_mm (float, optional): The number of pixels per millimeter for the dataset.
+                                   If None, distances will be returned in pixels.
 
     Returns:
         sleap.Labels: The predicted labels.
         dict: The evaluation metrics (without changing units).
-        metrics_summary: Dictionary containing the summary metrics (units in mm).
+        metrics_summary: Dictionary containing the summary metrics (units in mm if px_per_mm provided, otherwise pixels).
     """
     PROJECT_NAME = CONFIG["project_name"]
     ENTITY_NAME = CONFIG["entity_name"]
@@ -1154,17 +1155,33 @@ def evaluate_model(
         )
 
         # Extract summary metrics
+        # Convert pixel distances to mm if px_per_mm is provided, otherwise keep in pixels
+        if px_per_mm is not None:
+            dist_p50 = metrics["dist.p50"] / px_per_mm
+            dist_p90 = metrics["dist.p90"] / px_per_mm
+            dist_p95 = metrics["dist.p95"] / px_per_mm
+            dist_p99 = metrics["dist.p99"] / px_per_mm
+            dist_avg = metrics["dist.avg"] / px_per_mm
+            dist_std = np.nanstd(metrics["dist.dists"].flatten()) / px_per_mm
+        else:
+            dist_p50 = metrics["dist.p50"]
+            dist_p90 = metrics["dist.p90"]
+            dist_p95 = metrics["dist.p95"]
+            dist_p99 = metrics["dist.p99"]
+            dist_avg = metrics["dist.avg"]
+            dist_std = np.nanstd(metrics["dist.dists"].flatten())
+            
         metrics_summary = {
             "model_path": model_dir,
             "model_name": Path(model_dir).name,
             "test_path": test_artifact.download(skip_cache=True),
             "test_set_name": test_artifact_name,
-            "dist_p50": metrics["dist.p50"] / px_per_mm,
-            "dist_p90": metrics["dist.p90"] / px_per_mm,
-            "dist_p95": metrics["dist.p95"] / px_per_mm,
-            "dist_p99": metrics["dist.p99"] / px_per_mm,
-            "dist_avg": metrics["dist.avg"] / px_per_mm,
-            "dist_std": np.nanstd(metrics["dist.dists"].flatten()) / px_per_mm,
+            "dist_p50": dist_p50,
+            "dist_p90": dist_p90,
+            "dist_p95": dist_p95,
+            "dist_p99": dist_p99,
+            "dist_avg": dist_avg,
+            "dist_std": dist_std,
             "vis_prec": metrics["vis.precision"],
             "vis_recall": metrics["vis.recall"],
             "oks_map": metrics["oks_voc.mAP"],
@@ -1200,8 +1217,13 @@ def evaluate_model(
             run.summary[metric_name] = metric_value
 
         # Save detailed distance metrics
-        dists = metrics["dist.dists"].flatten() / px_per_mm
-        dists_df = pd.DataFrame({"distances_mm": dists})
+        if px_per_mm is not None:
+            dists = metrics["dist.dists"].flatten() / px_per_mm
+            column_name = "distances_mm"
+        else:
+            dists = metrics["dist.dists"].flatten()
+            column_name = "distances_px"
+        dists_df = pd.DataFrame({column_name: dists})
         dists_df.to_csv(
             Path(output_dir)
             / f"{model_artifact_name}_on_{test_artifact_name}_distances.csv",

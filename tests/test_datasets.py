@@ -54,7 +54,7 @@ class TestMakeDatasetArtifact:
                 )
 
                 mock_artifact.add_file.assert_called_once_with(
-                    local_path=str(dataset_path), overwrite=False
+                    local_path=dataset_path.as_posix(), overwrite=False
                 )
                 mock_run.log_artifact.assert_called_once_with(
                     mock_artifact, tags=["test", "dataset"]
@@ -175,7 +175,7 @@ class TestMakeDatasetArtifact:
                 )
 
                 # Check metadata was set
-                assert mock_artifact.metadata["data_path"] == str(dataset_path)
+                assert mock_artifact.metadata["data_path"] == dataset_path.as_posix()
                 assert mock_artifact.metadata["tag1"] is True
                 assert mock_artifact.metadata["tag2"] is True
 
@@ -283,7 +283,7 @@ class TestMakeDatasetArtifact:
 
                 # Check logging calls
                 mock_logging.info.assert_any_call(
-                    f"Dataset artifact created: test_artifact from {dataset_path}."
+                    f"Dataset artifact created: test_artifact from {dataset_path.as_posix()}."
                 )
                 mock_logging.info.assert_any_call(
                     f"Linking test_artifact to registry test_entity-org/wandb-registry-test_registry/test_collection."

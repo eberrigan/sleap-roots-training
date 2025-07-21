@@ -33,15 +33,20 @@ class TestLoadTrainingData:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write("version,path\n1,/path/to/v1\n2,/path/to/v2\n")
             f.flush()
+            temp_file = f.name
 
-            df = load_training_data(f.name)
+        df = load_training_data(temp_file)
 
-            assert len(df) == 2
-            assert list(df.columns) == ["version", "path"]
-            assert df.iloc[0]["version"] == 1
-            assert df.iloc[1]["path"] == "/path/to/v2"
+        assert len(df) == 2
+        assert list(df.columns) == ["version", "path"]
+        assert df.iloc[0]["version"] == 1
+        assert df.iloc[1]["path"] == "/path/to/v2"
 
-            Path(f.name).unlink()  # Clean up
+        # Clean up
+        try:
+            Path(temp_file).unlink()
+        except PermissionError:
+            pass  # File might still be locked on Windows
 
 
 class TestGetTrainingGroups:
@@ -312,6 +317,52 @@ class TestEvaluateModelAndGenerateVisuals:
         """Test evaluation with nonexistent model directory."""
         with pytest.raises(FileNotFoundError, match="Model directory not found"):
             evaluate_model_and_generate_visuals("/nonexistent/directory")
+
+    @patch("sleap_roots_training.train.sleap.load_metrics")
+    @patch("sleap_roots_training.train.plt.savefig")
+    @patch("sleap_roots_training.train.plt.close")
+    @patch("sleap_roots_training.train.sns.histplot")
+    @patch("sleap_roots_training.train.plt.figure")
+    def test_evaluate_model_px_per_mm_none(
+        self, mock_figure, mock_histplot, mock_close, mock_savefig, mock_load_metrics
+    ):
+        """Test model evaluation with px_per_mm=None (no conversion)."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_dir = Path(temp_dir)
+
+            # Mock metrics
+            mock_metrics = {
+                "dist.p50": 85.0,
+                "dist.p90": 170.0,
+                "dist.p95": 255.0,
+                "dist.p99": 340.0,
+                "dist.avg": 100.0,
+                "dist.dists": np.array([[85.0, 170.0], [255.0, 340.0]]),
+                "vis.precision": 0.95,
+                "vis.recall": 0.90,
+                "oks_voc.mAP": 0.85,
+                "oks_voc.mAR": 0.80,
+            }
+            mock_load_metrics.return_value = mock_metrics
+
+            metrics_df, dists_df, visualizations = evaluate_model_and_generate_visuals(
+                model_dir=model_dir, px_per_mm=None
+            )
+
+            # Check metrics DataFrame - values should NOT be converted (remain in pixels)
+            assert len(metrics_df) == 1
+            assert metrics_df.iloc[0]["dist_p50"] == 85.0  # No conversion
+            assert metrics_df.iloc[0]["dist_avg"] == 100.0  # No conversion
+            assert metrics_df.iloc[0]["vis_prec"] == 0.95
+            assert metrics_df.iloc[0]["oks_map"] == 0.85
+
+            # Check distances DataFrame - should be in pixels
+            assert len(dists_df) == 4  # Flattened array
+            assert "distances_px" in dists_df.columns  # Column name should indicate pixels
+
+            mock_load_metrics.assert_called_once_with(
+                model_dir.as_posix(), split="test"
+            )
 
 
 class TestUpdateConfigWithWandb:

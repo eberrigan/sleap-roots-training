@@ -157,12 +157,13 @@ def log_model_artifact(run, experiment_name, model_tags, model_dir, version):
     print(f"Model artifact '{model_artifact.name}' logged to W&B.")
 
 
-def evaluate_model_and_generate_visuals(model_dir, px_per_mm=17.0):
+def evaluate_model_and_generate_visuals(model_dir, px_per_mm=None):
     """Evaluates the model and generates visualizations for metrics.
 
     Args:
         model_dir (str or Path): Path to the directory containing the trained model.
-        px_per_mm (float): Pixel scaling factor for converting distances to mm.
+        px_per_mm (float, optional): Pixel scaling factor for converting distances to mm.
+                                   If None, distances will be returned in pixels.
 
     Returns:
         tuple:
@@ -182,15 +183,31 @@ def evaluate_model_and_generate_visuals(model_dir, px_per_mm=17.0):
     print(f"Metrics loaded from model directory: {model_dir_str}")
 
     # Extract summary metrics
+    # Convert pixel distances to mm if px_per_mm is provided, otherwise keep in pixels
+    if px_per_mm is not None:
+        dist_p50 = metrics["dist.p50"] / px_per_mm
+        dist_p90 = metrics["dist.p90"] / px_per_mm
+        dist_p95 = metrics["dist.p95"] / px_per_mm
+        dist_p99 = metrics["dist.p99"] / px_per_mm
+        dist_avg = metrics["dist.avg"] / px_per_mm
+        dist_std = np.nanstd(metrics["dist.dists"].flatten()) / px_per_mm
+    else:
+        dist_p50 = metrics["dist.p50"]
+        dist_p90 = metrics["dist.p90"]
+        dist_p95 = metrics["dist.p95"]
+        dist_p99 = metrics["dist.p99"]
+        dist_avg = metrics["dist.avg"]
+        dist_std = np.nanstd(metrics["dist.dists"].flatten())
+    
     metrics_summary = {
         "model_path": model_dir_str,
         "model_name": model_dir.name,
-        "dist_p50": metrics["dist.p50"] / px_per_mm,
-        "dist_p90": metrics["dist.p90"] / px_per_mm,
-        "dist_p95": metrics["dist.p95"] / px_per_mm,
-        "dist_p99": metrics["dist.p99"] / px_per_mm,
-        "dist_avg": metrics["dist.avg"] / px_per_mm,
-        "dist_std": np.nanstd(metrics["dist.dists"].flatten()) / px_per_mm,
+        "dist_p50": dist_p50,
+        "dist_p90": dist_p90,
+        "dist_p95": dist_p95,
+        "dist_p99": dist_p99,
+        "dist_avg": dist_avg,
+        "dist_std": dist_std,
         "vis_prec": metrics["vis.precision"],
         "vis_recall": metrics["vis.recall"],
         "oks_map": metrics["oks_voc.mAP"],
@@ -200,8 +217,13 @@ def evaluate_model_and_generate_visuals(model_dir, px_per_mm=17.0):
     metrics_summary_df = pd.DataFrame([metrics_summary])
 
     # Save detailed distance metrics
-    dists = metrics["dist.dists"].flatten() / px_per_mm
-    dists_df = pd.DataFrame({"distances_mm": dists})
+    if px_per_mm is not None:
+        dists = metrics["dist.dists"].flatten() / px_per_mm
+        column_name = "distances_mm"
+    else:
+        dists = metrics["dist.dists"].flatten()
+        column_name = "distances_px"
+    dists_df = pd.DataFrame({column_name: dists})
 
     # Generate histogram for distances
     plt.figure(figsize=(10, 6))
@@ -501,7 +523,7 @@ def run_single_training(
                     model_dir,
                     version,
                     evaluate_model_and_generate_visuals,
-                    {"model_dir": model_dir, "px_per_mm": 17.0},
+                    {"model_dir": model_dir, "px_per_mm": None},
                     link_to_registry,
                     registry_name,
                 )
@@ -552,7 +574,7 @@ def run_single_training(
             model_dir,
             version,
             evaluate_model_and_generate_visuals,
-            {"model_dir": model_dir, "px_per_mm": 17.0},
+            {"model_dir": model_dir, "px_per_mm": None},
             link_to_registry,
             registry_name,
         )
@@ -635,7 +657,7 @@ def make_sweep_train_fn(
                 model_dir,
                 version,
                 evaluate_model_and_generate_visuals,
-                {"model_dir": model_dir, "px_per_mm": 17.0},
+                {"model_dir": model_dir, "px_per_mm": None},
                 link_to_registry,
                 registry_name,
             )
