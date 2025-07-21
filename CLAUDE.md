@@ -129,6 +129,8 @@ Always save copies of helper notebooks with experiment-specific names and work o
 - `evaluate_model()`: Evaluate model against test dataset
 - `fetch_sweep_metrics()`: Retrieve metrics from W&B sweeps
 - `predictions_viz()`: Generate prediction visualizations
+- `fetch_metrics_from_sweep_pattern()`: **[NEW]** Find and fetch metrics from sweeps by name pattern
+- `group_sweep_runs_retroactively()`: **[NEW]** Retroactively group sweep runs for organization
 
 ### Configuration (`config.py`)
 - `load_config()`: Load configuration from YAML
@@ -268,6 +270,97 @@ Multiple GitHub Actions workflows run automatically on all branches:
 - Labels are stored as SLEAP files (`.slp`)
 - Models are stored in timestamped directories under `models/`
 - All artifacts are tracked in W&B with comprehensive metadata
+
+## Sweep Metrics Evaluation
+
+### Quick Start - Get All Metrics from Recent Sweeps
+
+For most use cases, this is what you need:
+
+```python
+from sleap_roots_training.evaluate import fetch_metrics_from_sweep_pattern
+
+# Define your target metrics
+TARGET_METRICS = ["dist_p50", "dist_p90", "dist_p95", "dist_avg", "vis_prec", "vis_recall"]
+
+# Get all metrics from sweeps matching your experiment pattern
+sweep_df = fetch_metrics_from_sweep_pattern(
+    name_pattern="20250717_plate_medicago_primary_sweep_receptive_field",
+    target_metrics=TARGET_METRICS,
+    earliest_time="2025-07-17T00:00:00Z",
+    include_config=True
+)
+
+print(f"Found {len(sweep_df)} runs from {sweep_df['sweep_id'].nunique()} sweeps")
+print(f"Columns: {list(sweep_df.columns)}")
+
+# Analyze results
+summary = sweep_df.groupby('sweep_name')[TARGET_METRICS].agg(['mean', 'std', 'count'])
+print(summary)
+```
+
+### Advanced Usage
+
+**Group runs for future organization:**
+```python
+# This will also retroactively group runs with proper names
+sweep_df = fetch_metrics_from_sweep_pattern(
+    name_pattern="medicago_primary_sweep",
+    target_metrics=TARGET_METRICS,
+    group_runs=True,  # Automatically group runs
+    group_name_base="medicago_receptive_field"
+)
+```
+
+**Find recent experiments by prefix:**
+```python
+from sleap_roots_training.evaluate import find_and_evaluate_recent_sweeps
+
+# Get all medicago experiments from the last 7 days
+df = find_and_evaluate_recent_sweeps(
+    experiment_prefix="medicago",
+    days_back=7
+)
+```
+
+**Retroactively group existing ungrouped runs:**
+```python
+from sleap_roots_training.evaluate import group_sweep_runs_retroactively
+
+# Group all runs from a specific sweep ID
+updated_runs = group_sweep_runs_retroactively(
+    sweep_id="4zkofrue",
+    group_name="20250717_plate_medicago_primary_sweep_receptive_field"
+)
+print(f"Updated {len(updated_runs)} runs")
+```
+
+### Key Benefits
+
+1. **No manual sweep ID tracking** - Finds sweeps automatically by name pattern
+2. **Multi-sweep support** - Handles multiple train/test splits in one dataframe
+3. **Automatic grouping** - Can organize runs retroactively or during fetch
+4. **Cross-platform compatibility** - Works on Windows, macOS, and Linux
+5. **Integration ready** - Works with existing evaluation and visualization functions
+
+### Migration from Old Workflow
+
+**Before (manual sweep IDs):**
+```python
+sweep_ids = ["4zkofrue", "abc123", "xyz789"]  # Manual tracking
+sweep_df = fetch_sweep_metrics(sweep_ids=sweep_ids, ...)
+```
+
+**After (automatic discovery):**
+```python
+sweep_df = fetch_metrics_from_sweep_pattern(
+    name_pattern="your_experiment_name",
+    target_metrics=TARGET_METRICS,
+    earliest_time="2025-07-17T00:00:00Z"
+)
+```
+
+This automatically finds all matching sweeps and combines metrics from all runs across all train/test splits.
 
 ## Important Notes
 
