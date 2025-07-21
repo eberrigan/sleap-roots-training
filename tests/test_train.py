@@ -33,15 +33,20 @@ class TestLoadTrainingData:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write("version,path\n1,/path/to/v1\n2,/path/to/v2\n")
             f.flush()
+            temp_file = f.name
 
-            df = load_training_data(f.name)
+        df = load_training_data(temp_file)
 
-            assert len(df) == 2
-            assert list(df.columns) == ["version", "path"]
-            assert df.iloc[0]["version"] == 1
-            assert df.iloc[1]["path"] == "/path/to/v2"
+        assert len(df) == 2
+        assert list(df.columns) == ["version", "path"]
+        assert df.iloc[0]["version"] == 1
+        assert df.iloc[1]["path"] == "/path/to/v2"
 
-            Path(f.name).unlink()  # Clean up
+        # Clean up
+        try:
+            Path(temp_file).unlink()
+        except PermissionError:
+            pass  # File might still be locked on Windows
 
 
 class TestGetTrainingGroups:
@@ -313,6 +318,54 @@ class TestEvaluateModelAndGenerateVisuals:
         with pytest.raises(FileNotFoundError, match="Model directory not found"):
             evaluate_model_and_generate_visuals("/nonexistent/directory")
 
+    @patch("sleap_roots_training.train.sleap.load_metrics")
+    @patch("sleap_roots_training.train.plt.savefig")
+    @patch("sleap_roots_training.train.plt.close")
+    @patch("sleap_roots_training.train.sns.histplot")
+    @patch("sleap_roots_training.train.plt.figure")
+    def test_evaluate_model_px_per_mm_none(
+        self, mock_figure, mock_histplot, mock_close, mock_savefig, mock_load_metrics
+    ):
+        """Test model evaluation with px_per_mm=None (no conversion)."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_dir = Path(temp_dir)
+
+            # Mock metrics
+            mock_metrics = {
+                "dist.p50": 85.0,
+                "dist.p90": 170.0,
+                "dist.p95": 255.0,
+                "dist.p99": 340.0,
+                "dist.avg": 100.0,
+                "dist.dists": np.array([[85.0, 170.0], [255.0, 340.0]]),
+                "vis.precision": 0.95,
+                "vis.recall": 0.90,
+                "oks_voc.mAP": 0.85,
+                "oks_voc.mAR": 0.80,
+            }
+            mock_load_metrics.return_value = mock_metrics
+
+            metrics_df, dists_df, visualizations = evaluate_model_and_generate_visuals(
+                model_dir=model_dir, px_per_mm=None
+            )
+
+            # Check metrics DataFrame - values should NOT be converted (remain in pixels)
+            assert len(metrics_df) == 1
+            assert metrics_df.iloc[0]["dist_p50"] == 85.0  # No conversion
+            assert metrics_df.iloc[0]["dist_avg"] == 100.0  # No conversion
+            assert metrics_df.iloc[0]["vis_prec"] == 0.95
+            assert metrics_df.iloc[0]["oks_map"] == 0.85
+
+            # Check distances DataFrame - should be in pixels
+            assert len(dists_df) == 4  # Flattened array
+            assert (
+                "distances_px" in dists_df.columns
+            )  # Column name should indicate pixels
+
+            mock_load_metrics.assert_called_once_with(
+                model_dir.as_posix(), split="test"
+            )
+
 
 class TestUpdateConfigWithWandb:
     """Test suite for update_config_with_wandb function."""
@@ -327,22 +380,30 @@ class TestUpdateConfigWithWandb:
             "model.backbone.type": "resnet50",
             "training.batch_size": 32,
         }
+        # Configure mock to behave like a dict when converted with dict()
         mock_wandb_config.__bool__ = lambda self: True
-        mock_wandb_config.__iter__ = lambda: iter(mock_config_dict.items())
-        mock_wandb_config.items = lambda: mock_config_dict.items()
-        # Mock dict() constructor call
-        with patch("builtins.dict", return_value=mock_config_dict):
-            original_config = {
-                "data": {"preprocessing": {"input_scaling": 1.0}},
-                "model": {"backbone": {"type": "resnet18"}},
-                "training": {"batch_size": 16},
-            }
+        mock_wandb_config.items.return_value = mock_config_dict.items()
+        mock_wandb_config.keys.return_value = mock_config_dict.keys()
+        mock_wandb_config.values.return_value = mock_config_dict.values()
+        mock_wandb_config.__iter__.return_value = iter(mock_config_dict.items())
 
-            updated_config = update_config_with_wandb(original_config)
+        # Make individual key access work
+        def mock_getitem(self, key):
+            return mock_config_dict[key]
 
-            assert updated_config["data"]["preprocessing"]["input_scaling"] == 0.5
-            assert updated_config["model"]["backbone"]["type"] == "resnet50"
-            assert updated_config["training"]["batch_size"] == 32
+        mock_wandb_config.__getitem__ = mock_getitem
+
+        original_config = {
+            "data": {"preprocessing": {"input_scaling": 1.0}},
+            "model": {"backbone": {"type": "resnet18"}},
+            "training": {"batch_size": 16},
+        }
+
+        updated_config = update_config_with_wandb(original_config)
+
+        assert updated_config["data"]["preprocessing"]["input_scaling"] == 0.5
+        assert updated_config["model"]["backbone"]["type"] == "resnet50"
+        assert updated_config["training"]["batch_size"] == 32
 
     @patch("sleap_roots_training.train.wandb.config")
     def test_update_config_no_wandb_config(self, mock_wandb_config):
@@ -427,6 +488,263 @@ class TestGetParamCombinations:
         combinations = get_param_combinations(sweep_config)
 
         assert combinations == 1  # Empty product is 1
+
+
+class TestMakeSweepTrainFn:
+    """Test suite for make_sweep_train_fn function."""
+
+    @patch("sleap_roots_training.train.wandb.config")
+    @patch("sleap_roots_training.train.wandb.init")
+    @patch("sleap_roots_training.train.update_config_with_wandb")
+    @patch("sleap_roots_training.train.execute_training")
+    @patch("sleap_roots_training.train.get_latest_run")
+    @patch("sleap_roots_training.train.log_model_artifact_with_evals")
+    @patch("builtins.open", new_callable=mock_open, read_data='{"test": "config"}')
+    def test_make_sweep_train_fn_success(
+        self,
+        mock_file,
+        mock_log_artifact,
+        mock_get_latest_run,
+        mock_execute_training,
+        mock_update_config,
+        mock_wandb_init,
+        mock_wandb_config,
+    ):
+        """Test successful sweep training function creation and execution."""
+        # Setup mocks
+        mock_run = MagicMock()
+        mock_run.id = "test_run_id"
+        mock_wandb_init.return_value = mock_run
+
+        mock_updated_config = {"updated": "config"}
+        mock_update_config.return_value = mock_updated_config
+
+        mock_model_dir = MagicMock()
+        mock_model_dir.exists.return_value = True
+        mock_get_latest_run.return_value = mock_model_dir
+
+        # Create sweep training function
+        train_fn = make_sweep_train_fn(
+            version="1",
+            config_copy={"original": "config"},
+            dir_path=Path("/fake/dir"),
+            sleap_train_command="sleap-train {}",
+            experiment_name="test_experiment",
+            model_tags=["test_tag"],
+            link_to_registry=False,
+            registry_name=None,
+        )
+
+        # Execute the training function
+        train_fn()
+
+        # Verify wandb.init was called with group parameter
+        mock_wandb_init.assert_called_once_with(group="test_experiment")
+
+        # Verify config was updated
+        mock_update_config.assert_called_once_with({"original": "config"})
+
+        # Verify training was executed
+        mock_execute_training.assert_called_once()
+        args, kwargs = mock_execute_training.call_args
+        assert "sleap-train" in args[0]
+
+        # Verify model artifact was logged
+        mock_log_artifact.assert_called_once()
+
+    @patch("sleap_roots_training.train.wandb.config")
+    @patch("sleap_roots_training.train.wandb.init")
+    @patch("sleap_roots_training.train.update_config_with_wandb")
+    @patch("sleap_roots_training.train.execute_training")
+    @patch("builtins.open", new_callable=mock_open, read_data='{"test": "config"}')
+    def test_make_sweep_train_fn_training_failure(
+        self,
+        mock_file,
+        mock_execute_training,
+        mock_update_config,
+        mock_wandb_init,
+        mock_wandb_config,
+    ):
+        """Test sweep training function handles training failure."""
+        # Setup mocks
+        mock_run = MagicMock()
+        mock_run.id = "test_run_id"
+        mock_wandb_init.return_value = mock_run
+
+        mock_update_config.return_value = {"updated": "config"}
+        mock_execute_training.side_effect = Exception("Training failed")
+
+        # Create sweep training function
+        train_fn = make_sweep_train_fn(
+            version="1",
+            config_copy={"original": "config"},
+            dir_path=Path("/fake/dir"),
+            sleap_train_command="sleap-train {}",
+            experiment_name="test_experiment",
+            model_tags=["test_tag"],
+            link_to_registry=False,
+            registry_name=None,
+        )
+
+        # Execute the training function and expect exception
+        with pytest.raises(Exception, match="Training failed"):
+            train_fn()
+
+        # Verify wandb.init was still called with group parameter
+        mock_wandb_init.assert_called_once_with(group="test_experiment")
+
+    @patch("sleap_roots_training.train.wandb.config")
+    @patch("sleap_roots_training.train.wandb.init")
+    @patch("sleap_roots_training.train.update_config_with_wandb")
+    @patch("sleap_roots_training.train.execute_training")
+    @patch("sleap_roots_training.train.get_latest_run")
+    @patch("sleap_roots_training.train.log_model_artifact_with_evals")
+    @patch("builtins.open", new_callable=mock_open, read_data='{"test": "config"}')
+    def test_make_sweep_train_fn_with_registry(
+        self,
+        mock_file,
+        mock_log_artifact,
+        mock_get_latest_run,
+        mock_execute_training,
+        mock_update_config,
+        mock_wandb_init,
+        mock_wandb_config,
+    ):
+        """Test sweep training function with registry linking."""
+        # Setup mocks
+        mock_run = MagicMock()
+        mock_run.id = "test_run_id"
+        mock_wandb_init.return_value = mock_run
+
+        mock_update_config.return_value = {"updated": "config"}
+        mock_model_dir = MagicMock()
+        mock_model_dir.exists.return_value = True
+        mock_get_latest_run.return_value = mock_model_dir
+
+        # Create sweep training function with registry
+        train_fn = make_sweep_train_fn(
+            version="1",
+            config_copy={"original": "config"},
+            dir_path=Path("/fake/dir"),
+            sleap_train_command="sleap-train {}",
+            experiment_name="test_experiment",
+            model_tags=["test_tag"],
+            link_to_registry=True,
+            registry_name="test_registry",
+        )
+
+        # Execute the training function
+        train_fn()
+
+        # Verify log_model_artifact_with_evals was called with registry parameters
+        mock_log_artifact.assert_called_once()
+        args, kwargs = mock_log_artifact.call_args
+        # Check that registry parameters are passed - using positional arguments
+        # log_model_artifact_with_evals(run, experiment_name, model_tags, model_dir, version, eval_fn, eval_args, link_to_registry, registry_name)
+        assert args[7] == True  # link_to_registry
+        assert args[8] == "test_registry"  # registry_name
+
+
+class TestRunSweepTraining:
+    """Test suite for run_sweep_training function."""
+
+    @patch("sleap_roots_training.train.wandb.sweep")
+    @patch("sleap_roots_training.train.wandb.agent")
+    @patch("sleap_roots_training.train.make_sweep_train_fn")
+    @patch("sleap_roots_training.train.get_param_combinations")
+    def test_run_sweep_training_basic(
+        self,
+        mock_get_param_combinations,
+        mock_make_sweep_train_fn,
+        mock_wandb_agent,
+        mock_wandb_sweep,
+    ):
+        """Test basic sweep training execution."""
+        # Setup mocks
+        mock_wandb_sweep.return_value = "test_sweep_id"
+        mock_get_param_combinations.return_value = 4
+        mock_train_fn = MagicMock()
+        mock_make_sweep_train_fn.return_value = mock_train_fn
+
+        sweep_config = {
+            "method": "grid",
+            "parameters": {"param1": {"values": [1, 2]}, "param2": {"values": [3, 4]}},
+        }
+
+        # Execute sweep training
+        run_sweep_training(
+            project_name="test_project",
+            entity_name="test_entity",
+            experiment_name="test_experiment",
+            version="1",
+            config_copy={"original": "config"},
+            dir_path=Path("/fake/dir"),
+            model_tags=["test_tag"],
+            sleap_train_command="sleap-train {}",
+            sweep_config=sweep_config,
+            link_to_registry=False,
+            registry_name=None,
+        )
+
+        # Verify sweep was created
+        mock_wandb_sweep.assert_called_once()
+        args, kwargs = mock_wandb_sweep.call_args
+        assert kwargs["project"] == "test_project"
+        assert kwargs["entity"] == "test_entity"
+
+        # Verify sweep training function was created
+        mock_make_sweep_train_fn.assert_called_once()
+
+        # Verify agent was started
+        mock_wandb_agent.assert_called_once()
+        args, kwargs = mock_wandb_agent.call_args
+        assert args[0] == "test_sweep_id"
+        assert kwargs["function"] == mock_train_fn
+        assert kwargs["count"] == 4
+
+    @patch("sleap_roots_training.train.wandb.sweep")
+    @patch("sleap_roots_training.train.wandb.agent")
+    @patch("sleap_roots_training.train.make_sweep_train_fn")
+    @patch("sleap_roots_training.train.get_param_combinations")
+    def test_run_sweep_training_with_registry(
+        self,
+        mock_get_param_combinations,
+        mock_make_sweep_train_fn,
+        mock_wandb_agent,
+        mock_wandb_sweep,
+    ):
+        """Test sweep training with registry linking."""
+        # Setup mocks
+        mock_wandb_sweep.return_value = "test_sweep_id"
+        mock_get_param_combinations.return_value = 2
+        mock_train_fn = MagicMock()
+        mock_make_sweep_train_fn.return_value = mock_train_fn
+
+        sweep_config = {
+            "method": "random",
+            "parameters": {"param1": {"values": [1, 2]}},
+        }
+
+        # Execute sweep training with registry
+        run_sweep_training(
+            project_name="test_project",
+            entity_name="test_entity",
+            experiment_name="test_experiment",
+            version="1",
+            config_copy={"original": "config"},
+            dir_path=Path("/fake/dir"),
+            model_tags=["test_tag"],
+            sleap_train_command="sleap-train {}",
+            sweep_config=sweep_config,
+            link_to_registry=True,
+            registry_name="test_registry",
+        )
+
+        # Verify sweep training function was created with registry parameters
+        mock_make_sweep_train_fn.assert_called_once()
+        args, kwargs = mock_make_sweep_train_fn.call_args
+        assert kwargs["link_to_registry"] == True
+        assert kwargs["registry_name"] == "test_registry"
 
 
 class TestMainFunction:

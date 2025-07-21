@@ -763,11 +763,310 @@ def get_sweep_ids_for_group_from_runs(
     return sweep_ids
 
 
+def group_sweep_runs_retroactively(
+    sweep_id: str,
+    group_name: str,
+    entity_name: Optional[str] = None,
+    project_name: Optional[str] = None,
+    update_run_names: bool = False,
+    name_prefix: Optional[str] = None,
+) -> List[str]:
+    """Retroactively add group to all runs in a sweep.
+
+    This function is useful when you've run a sweep without setting the group parameter
+    and want to organize the runs afterwards for evaluation.
+
+    Args:
+        sweep_id (str): The W&B sweep ID.
+        group_name (str): The group name to assign to all runs in the sweep.
+        entity_name (Optional[str]): The W&B entity name. Uses config if not provided.
+        project_name (Optional[str]): The W&B project name. Uses config if not provided.
+        update_run_names (bool): Whether to also update run names to include group prefix.
+        name_prefix (Optional[str]): Custom prefix for run names. If None, uses group_name.
+
+    Returns:
+        List[str]: List of run IDs that were updated.
+
+    Example:
+        >>> # Group all runs from a sweep
+        >>> group_sweep_runs_retroactively(
+        ...     sweep_id="4zkofrue",
+        ...     group_name="20250717_plate_medicago_primary_sweep_receptive_field"
+        ... )
+
+        >>> # Also update run names with custom prefix
+        >>> group_sweep_runs_retroactively(
+        ...     sweep_id="4zkofrue",
+        ...     group_name="medicago_receptive_field_sweep",
+        ...     update_run_names=True,
+        ...     name_prefix="medicago_rf"
+        ... )
+    """
+    entity = entity_name or CONFIG["entity_name"]
+    project = project_name or CONFIG["project_name"]
+
+    api = wandb.Api()
+    updated_runs = []
+
+    try:
+        # Get the sweep
+        sweep = api.sweep(f"{entity}/{project}/{sweep_id}")
+        logging.info(f"Found sweep: {sweep.name} with {len(sweep.runs)} runs")
+
+        # Update each run in the sweep
+        for run in sweep.runs:
+            try:
+                # Update the run's group
+                run.group = group_name
+                run.update()
+
+                # Optionally update run name
+                if update_run_names:
+                    prefix = name_prefix or group_name
+                    if not run.name.startswith(prefix):
+                        new_name = f"{prefix}_{run.name}"
+                        run.name = new_name
+                        run.update()
+                        logging.info(
+                            f"Updated run {run.id}: group='{group_name}', name='{new_name}'"
+                        )
+                else:
+                    logging.info(f"Updated run {run.id}: group='{group_name}'")
+
+                updated_runs.append(run.id)
+
+            except Exception as e:
+                logging.error(f"Failed to update run {run.id}: {str(e)}")
+                continue
+
+        logging.info(
+            f"Successfully updated {len(updated_runs)} runs with group '{group_name}'"
+        )
+
+    except Exception as e:
+        logging.error(f"Failed to access sweep {sweep_id}: {str(e)}")
+
+    return updated_runs
+
+
+def get_runs_by_sweep_name_pattern(
+    name_pattern: str,
+    entity_name: Optional[str] = None,
+    project_name: Optional[str] = None,
+    earliest_time: Optional[str] = None,
+) -> Dict[str, List]:
+    """Find runs from sweeps matching a name pattern.
+
+    This is useful when you know part of the sweep name but not the exact ID.
+
+    Args:
+        name_pattern (str): Pattern to match in sweep names (e.g., "medicago_primary_sweep").
+        entity_name (Optional[str]): The W&B entity name.
+        project_name (Optional[str]): The W&B project name.
+        earliest_time (Optional[str]): ISO 8601 timestamp to filter sweeps created after this time.
+
+    Returns:
+        Dict[str, List]: Dictionary mapping sweep IDs to their runs.
+
+    Example:
+        >>> runs_by_sweep = get_runs_by_sweep_name_pattern(
+        ...     name_pattern="medicago_primary_sweep",
+        ...     earliest_time="2025-07-17T00:00:00Z"
+        ... )
+        >>> for sweep_id, runs in runs_by_sweep.items():
+        ...     print(f"Sweep {sweep_id} has {len(runs)} runs")
+    """
+    entity = entity_name or CONFIG["entity_name"]
+    project = project_name or CONFIG["project_name"]
+
+    api = wandb.Api()
+    sweeps = api.sweeps(f"{entity}/{project}")
+
+    matching_sweeps = {}
+
+    for sweep in sweeps:
+        # Check if sweep matches pattern
+        if name_pattern.lower() in sweep.name.lower():
+            # Check creation time if specified
+            if earliest_time:
+                sweep_created = datetime.datetime.fromisoformat(
+                    sweep.created_at.replace("Z", "+00:00")
+                )
+                earliest = datetime.datetime.fromisoformat(
+                    earliest_time.replace("Z", "+00:00")
+                )
+                if sweep_created < earliest:
+                    continue
+
+            logging.info(f"Found matching sweep: {sweep.name} (ID: {sweep.id})")
+            matching_sweeps[sweep.id] = list(sweep.runs)
+
+    logging.info(
+        f"Found {len(matching_sweeps)} sweeps matching pattern '{name_pattern}'"
+    )
+    return matching_sweeps
+
+
+def fetch_metrics_from_sweep_pattern(
+    name_pattern: str,
+    target_metrics: List[str],
+    earliest_time: Optional[str] = None,
+    include_config: bool = True,
+    group_runs: bool = True,
+    group_name_base: Optional[str] = None,
+) -> pd.DataFrame:
+    """Fetch metrics from all sweeps matching a name pattern.
+
+    This function finds all sweeps matching a pattern, optionally groups their runs,
+    and returns all metrics in a single dataframe.
+
+    Args:
+        name_pattern (str): Pattern to match in sweep names (e.g., "medicago_primary_sweep").
+        target_metrics (List[str]): List of metric names to fetch.
+        earliest_time (Optional[str]): ISO 8601 timestamp to filter sweeps created after this time.
+        include_config (bool): Whether to include configuration parameters in the output.
+        group_runs (bool): Whether to retroactively group runs for organization.
+        group_name_base (Optional[str]): Base name for grouping. If None, uses name_pattern.
+
+    Returns:
+        pd.DataFrame: DataFrame containing metrics from all matching sweeps.
+
+    Example:
+        >>> # Get all metrics from medicago sweeps
+        >>> df = fetch_metrics_from_sweep_pattern(
+        ...     name_pattern="20250717_plate_medicago_primary_sweep",
+        ...     target_metrics=["dist_p50", "dist_p90", "vis_prec"],
+        ...     earliest_time="2025-07-17T00:00:00Z"
+        ... )
+        >>> print(f"Found {len(df)} runs from {df['sweep_id'].nunique()} sweeps")
+    """
+    # Find all matching sweeps
+    sweeps_dict = get_runs_by_sweep_name_pattern(
+        name_pattern=name_pattern, earliest_time=earliest_time
+    )
+
+    if not sweeps_dict:
+        logging.warning(f"No sweeps found matching pattern '{name_pattern}'")
+        return pd.DataFrame()
+
+    all_sweep_ids = list(sweeps_dict.keys())
+    logging.info(f"Found {len(all_sweep_ids)} sweeps matching pattern '{name_pattern}'")
+
+    # Optionally group runs for better organization
+    if group_runs:
+        base_name = group_name_base or name_pattern
+        for i, (sweep_id, runs) in enumerate(sweeps_dict.items()):
+            version = f"v{i:03d}"
+            group_name = f"{base_name}_{version}"
+
+            try:
+                group_sweep_runs_retroactively(sweep_id=sweep_id, group_name=group_name)
+                logging.info(f"Grouped sweep {sweep_id} as {group_name}")
+            except Exception as e:
+                logging.warning(f"Failed to group sweep {sweep_id}: {e}")
+
+    # Fetch metrics from all sweeps
+    df = fetch_sweep_metrics(
+        sweep_ids=all_sweep_ids,
+        target_metrics=target_metrics,
+        include_config=include_config,
+    )
+
+    # Add sweep name for easier identification
+    if not df.empty:
+        # Map sweep IDs to sweep names
+        api = wandb.Api()
+        sweep_names = {}
+        for sweep_id in all_sweep_ids:
+            try:
+                sweep = api.sweep(
+                    f"{CONFIG['entity_name']}/{CONFIG['project_name']}/{sweep_id}"
+                )
+                sweep_names[sweep_id] = sweep.name
+            except:
+                sweep_names[sweep_id] = sweep_id
+
+        df["sweep_name"] = df["sweep_id"].map(sweep_names)
+
+        # Add experiment identifier
+        df["experiment"] = name_pattern
+
+        # If multiple sweeps, add a version column
+        if len(all_sweep_ids) > 1:
+            df["sweep_version"] = df["sweep_id"].map(
+                {sid: f"v{i:03d}" for i, sid in enumerate(all_sweep_ids)}
+            )
+
+    return df
+
+
+def find_and_evaluate_recent_sweeps(
+    experiment_prefix: str,
+    days_back: int = 7,
+    target_metrics: Optional[List[str]] = None,
+) -> pd.DataFrame:
+    """Find and evaluate all sweeps from recent experiments.
+
+    This is a convenience function for quickly evaluating recent experiments.
+
+    Args:
+        experiment_prefix (str): Prefix of experiment names to search for.
+        days_back (int): Number of days to look back for experiments.
+        target_metrics (Optional[List[str]]): Metrics to fetch. If None, uses default metrics.
+
+    Returns:
+        pd.DataFrame: Combined metrics from all recent sweeps.
+
+    Example:
+        >>> # Find all medicago sweeps from the last week
+        >>> df = find_and_evaluate_recent_sweeps(
+        ...     experiment_prefix="medicago",
+        ...     days_back=7
+        ... )
+    """
+    if target_metrics is None:
+        target_metrics = [
+            "dist_p50",
+            "dist_p90",
+            "dist_p95",
+            "dist_avg",
+            "vis_prec",
+            "vis_recall",
+            "oks_map",
+        ]
+
+    # Calculate earliest time
+    from datetime import datetime, timedelta
+
+    earliest_time = (datetime.now() - timedelta(days=days_back)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+
+    # Fetch metrics
+    df = fetch_metrics_from_sweep_pattern(
+        name_pattern=experiment_prefix,
+        target_metrics=target_metrics,
+        earliest_time=earliest_time,
+        include_config=True,
+        group_runs=True,
+    )
+
+    if not df.empty:
+        logging.info(f"Found {len(df)} runs from {df['sweep_id'].nunique()} sweeps")
+
+        # Add summary statistics
+        print("\nSummary by sweep:")
+        summary = df.groupby("sweep_name")[target_metrics].agg(["mean", "std", "count"])
+        print(summary)
+
+    return df
+
+
 def evaluate_model(
     model_artifact_name: str,
     test_artifact_name: str,
     output_dir: str = "output",
-    px_per_mm=17.0,
+    px_per_mm=None,
 ) -> tuple:
     """Evaluate a model artifact against a test dataset.
 
@@ -777,12 +1076,13 @@ def evaluate_model(
             a model directory from a model artifact since associated test sets are saved
             in model artifacts.
         output_dir (str): The directory to save the evaluation results. Default is "output".
-        px_per_mm (float): The number of pixels per millimeter for the dataset. Default is 17.0.
+        px_per_mm (float, optional): The number of pixels per millimeter for the dataset.
+                                   If None, distances will be returned in pixels.
 
     Returns:
         sleap.Labels: The predicted labels.
         dict: The evaluation metrics (without changing units).
-        metrics_summary: Dictionary containing the summary metrics (units in mm).
+        metrics_summary: Dictionary containing the summary metrics (units in mm if px_per_mm provided, otherwise pixels).
     """
     PROJECT_NAME = CONFIG["project_name"]
     ENTITY_NAME = CONFIG["entity_name"]
@@ -867,17 +1167,33 @@ def evaluate_model(
         )
 
         # Extract summary metrics
+        # Convert pixel distances to mm if px_per_mm is provided, otherwise keep in pixels
+        if px_per_mm is not None:
+            dist_p50 = metrics["dist.p50"] / px_per_mm
+            dist_p90 = metrics["dist.p90"] / px_per_mm
+            dist_p95 = metrics["dist.p95"] / px_per_mm
+            dist_p99 = metrics["dist.p99"] / px_per_mm
+            dist_avg = metrics["dist.avg"] / px_per_mm
+            dist_std = np.nanstd(metrics["dist.dists"].flatten()) / px_per_mm
+        else:
+            dist_p50 = metrics["dist.p50"]
+            dist_p90 = metrics["dist.p90"]
+            dist_p95 = metrics["dist.p95"]
+            dist_p99 = metrics["dist.p99"]
+            dist_avg = metrics["dist.avg"]
+            dist_std = np.nanstd(metrics["dist.dists"].flatten())
+
         metrics_summary = {
             "model_path": model_dir,
             "model_name": Path(model_dir).name,
             "test_path": test_artifact.download(skip_cache=True),
             "test_set_name": test_artifact_name,
-            "dist_p50": metrics["dist.p50"] / px_per_mm,
-            "dist_p90": metrics["dist.p90"] / px_per_mm,
-            "dist_p95": metrics["dist.p95"] / px_per_mm,
-            "dist_p99": metrics["dist.p99"] / px_per_mm,
-            "dist_avg": metrics["dist.avg"] / px_per_mm,
-            "dist_std": np.nanstd(metrics["dist.dists"].flatten()) / px_per_mm,
+            "dist_p50": dist_p50,
+            "dist_p90": dist_p90,
+            "dist_p95": dist_p95,
+            "dist_p99": dist_p99,
+            "dist_avg": dist_avg,
+            "dist_std": dist_std,
             "vis_prec": metrics["vis.precision"],
             "vis_recall": metrics["vis.recall"],
             "oks_map": metrics["oks_voc.mAP"],
@@ -913,8 +1229,13 @@ def evaluate_model(
             run.summary[metric_name] = metric_value
 
         # Save detailed distance metrics
-        dists = metrics["dist.dists"].flatten() / px_per_mm
-        dists_df = pd.DataFrame({"distances_mm": dists})
+        if px_per_mm is not None:
+            dists = metrics["dist.dists"].flatten() / px_per_mm
+            column_name = "distances_mm"
+        else:
+            dists = metrics["dist.dists"].flatten()
+            column_name = "distances_px"
+        dists_df = pd.DataFrame({column_name: dists})
         dists_df.to_csv(
             Path(output_dir)
             / f"{model_artifact_name}_on_{test_artifact_name}_distances.csv",

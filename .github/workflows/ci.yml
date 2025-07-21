@@ -18,14 +18,6 @@ jobs:
       with:
         python-version: '3.8'
     
-    - name: Cache pip packages
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-3.8-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-3.8-
-          ${{ runner.os }}-pip-
     
     - name: Install system dependencies for SLEAP
       run: |

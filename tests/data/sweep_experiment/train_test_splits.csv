@@ -1,0 +1,4 @@
+path,version,labeled_frames,split_type
+\\multilab-na.ad.salk.edu\hpi_dev\users\eberrigan\SLEAP\20250717_plate_medicago_primary_sweep_receptive_field\train_test_split.v000\train.pkg.slp,0,16,train
+\\multilab-na.ad.salk.edu\hpi_dev\users\eberrigan\SLEAP\20250717_plate_medicago_primary_sweep_receptive_field\train_test_split.v000\val.pkg.slp,0,3,val
+\\multilab-na.ad.salk.edu\hpi_dev\users\eberrigan\SLEAP\20250717_plate_medicago_primary_sweep_receptive_field\train_test_split.v000\test.pkg.slp,0,4,test
