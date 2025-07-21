@@ -2,7 +2,7 @@ import pytest
 import tempfile
 import yaml
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 
 from sleap_roots_training.config import (
     create_default_config,

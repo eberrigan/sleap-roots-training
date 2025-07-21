@@ -1,5 +1,4 @@
 import pytest
-import wandb
 from unittest.mock import patch, MagicMock, Mock, call
 from sleap_roots_training.models import (
     validate_tags,

@@ -11,7 +11,6 @@ import json
 import pandas as pd
 from pathlib import Path
 import shutil
-import os
 
 from sleap_roots_training.train import load_training_data
 

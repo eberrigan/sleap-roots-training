@@ -2,7 +2,6 @@ import pandas as pd
 import json
 import wandb
 import subprocess
-import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 import sleap

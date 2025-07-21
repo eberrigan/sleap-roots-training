@@ -1,8 +1,7 @@
 import pytest
 import tempfile
-import wandb
 from pathlib import Path
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, MagicMock
 
 from sleap_roots_training.datasets import make_dataset_artifact
 
