@@ -202,7 +202,7 @@ The project uses streamlined GitHub Actions workflows for comprehensive testing:
    - **Jobs**: 
      - **test**: Testing, linting, coverage (80% threshold), Codecov upload
      - **build**: Package building and validation
-   - **Triggers**: Every push and PR
+   - **Triggers**: Push to main branch, PR opens/updates to main
 
 ### Why This Setup?
 
@@ -211,7 +211,7 @@ The project uses streamlined GitHub Actions workflows for comprehensive testing:
 - **Conda locally**: Developers use conda for full GPU support and dependencies (any Python 3.7-3.9)
 - **Streamlined workflows**: Fast feedback with comprehensive coverage
 
-All workflows run on every push and pull request to ensure code quality.
+The CI workflow runs on push to main and when pull requests are opened or updated, ensuring efficient resource usage while maintaining code quality.
 
 ## Documentation
 
