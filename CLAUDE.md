@@ -274,7 +274,7 @@ When developing or modifying tests, follow this workflow:
 
 Multiple GitHub Actions workflows run automatically:
 
-**Comprehensive (runs on all branches):**
+**Comprehensive (runs on changes to main):**
 - **`test-imports.yml`** - Cross-platform import validation:
   - Tests on Ubuntu, Windows, macOS
   - Python 3.8 compatibility

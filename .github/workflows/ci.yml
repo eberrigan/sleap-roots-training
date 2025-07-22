@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "main" ]  # Run on push to main branch only
   pull_request:
-    types: [opened, synchronize]  # Run when PR is opened or updated
+    types: [opened, closed]  # Run when PR is opened or closed
     branches: [ "main" ]  # Run on PRs to main branch
 
 jobs:
