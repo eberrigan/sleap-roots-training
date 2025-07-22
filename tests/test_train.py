@@ -747,6 +747,109 @@ class TestRunSweepTraining:
         assert kwargs["registry_name"] == "test_registry"
 
 
+class TestGetLatestRunAdditional:
+    """Additional tests for get_latest_run function."""
+
+    def test_get_latest_run_multiple_dirs(self):
+        """Test get_latest_run with multiple timestamped directories."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            models_dir = Path(temp_dir)
+            
+            # Create multiple run directories with different timestamps
+            dirs = ["run_240101_120000", "run_240102_140000", "run_240102_100000"]
+            for d in dirs:
+                (models_dir / d).mkdir()
+            
+            latest = get_latest_run(models_dir)
+            assert latest is not None
+            assert latest.name == "run_240102_140000"  # Latest timestamp
+
+
+class TestRunSweepTrainingAdditional:
+    """Additional tests for run_sweep_training function."""
+
+    @patch("sleap_roots_training.train.wandb.sweep")
+    @patch("sleap_roots_training.train.wandb.agent")
+    @patch("sleap_roots_training.train.make_sweep_train_fn")
+    @patch("sleap_roots_training.train.get_param_combinations")
+    def test_run_sweep_training_random_method(
+        self, mock_get_params, mock_make_fn, mock_agent, mock_sweep
+    ):
+        """Test sweep with random method (undetermined count)."""
+        mock_sweep.return_value = "sweep_id"
+        mock_get_params.return_value = None  # Random method returns None
+        mock_train_fn = MagicMock()
+        mock_make_fn.return_value = mock_train_fn
+        
+        sweep_config = {"method": "random", "parameters": {}}
+        
+        run_sweep_training(
+            project_name="test",
+            entity_name="test",
+            experiment_name="test",
+            version="1",
+            config_copy={},
+            dir_path=Path("."),
+            model_tags=[],
+            sleap_train_command="",
+            sweep_config=sweep_config,
+            link_to_registry=False,
+            registry_name=None,
+        )
+        
+        # Verify agent was called without count
+        call_kwargs = mock_agent.call_args[1]
+        assert "count" not in call_kwargs or call_kwargs["count"] is None
+
+
+class TestMakeSweepTrainFnAdditional:
+    """Additional tests for make_sweep_train_fn."""
+
+    @patch("sleap_roots_training.train.wandb")
+    @patch("sleap_roots_training.train.update_config_with_wandb")
+    @patch("sleap_roots_training.train.execute_training")
+    @patch("sleap_roots_training.train.get_latest_run")
+    @patch("sleap_roots_training.train.logging")
+    @patch("builtins.open", new_callable=mock_open, read_data='{"test": "config"}')
+    def test_sweep_train_fn_no_model_dir(
+        self,
+        mock_file,
+        mock_logging,
+        mock_get_latest_run,
+        mock_execute_training,
+        mock_update_config,
+        mock_wandb,
+    ):
+        """Test sweep train function when model directory is not found."""
+        # Setup mocks
+        mock_wandb.run = MagicMock()
+        mock_wandb.run.id = "test_run_id"
+        mock_wandb.init.return_value = MagicMock()
+        mock_wandb.config = {}
+        
+        mock_update_config.return_value = {"updated": "config"}
+        mock_get_latest_run.return_value = None  # No model dir found
+        
+        # Create sweep training function
+        train_fn = make_sweep_train_fn(
+            version="1",
+            config_copy={"original": "config"},
+            dir_path=Path("/fake/dir"),
+            sleap_train_command="sleap-train {}",
+            experiment_name="test_experiment",
+            model_tags=["test_tag"],
+            link_to_registry=False,
+            registry_name=None,
+        )
+        
+        # Execute and expect error
+        with pytest.raises(FileNotFoundError):
+            train_fn()
+        
+        # Verify error was logged
+        mock_logging.error.assert_called()
+
+
 class TestMainFunction:
     """Test suite for main function."""
 
