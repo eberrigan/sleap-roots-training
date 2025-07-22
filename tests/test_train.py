@@ -1205,6 +1205,7 @@ class TestAdditionalTrainFunctions:
 class TestRunSingleTrainingCoverage:
     """Tests to improve coverage of run_single_training function."""
 
+    @patch("sleap_roots_training.train.wandb.config", {})
     @patch("sleap_roots_training.train.CONFIG")
     @patch("sleap_roots_training.train.log_to_wandb")
     @patch("sleap_roots_training.train.execute_training")
@@ -1264,6 +1265,7 @@ class TestRunSingleTrainingCoverage:
         mock_log_artifact.assert_called_once()
         mock_run.finish.assert_called_once()
 
+    @patch("sleap_roots_training.train.wandb.config", {})
     @patch("sleap_roots_training.train.CONFIG")
     @patch("sleap_roots_training.train.log_to_wandb")
     @patch("sleap_roots_training.train.execute_training")
@@ -1288,7 +1290,9 @@ class TestRunSingleTrainingCoverage:
                 json.dump({"test": "config"}, f)
 
             # Should raise FileNotFoundError when no model found
-            with pytest.raises(FileNotFoundError, match="Model directory not found"):
+            with pytest.raises(
+                FileNotFoundError, match="No existing model directory found"
+            ):
                 run_single_training(
                     project_name="test_project",
                     entity_name="test_entity",
@@ -1317,6 +1321,10 @@ class TestLogModelArtifactWithEvalsCoverage:
         mock_run = MagicMock()
         mock_artifact = MagicMock()
         mock_artifact_class.return_value = mock_artifact
+
+        # Setup mock so run.log_artifact returns a mock logged artifact with link method
+        mock_logged_artifact = MagicMock()
+        mock_run.log_artifact.return_value = mock_logged_artifact
 
         # Mock eval function
         mock_eval_fn = MagicMock()
@@ -1355,7 +1363,9 @@ class TestLogModelArtifactWithEvalsCoverage:
         mock_eval_fn.assert_called_once()
         mock_artifact_class.assert_called()
         mock_run.log_artifact.assert_called()
-        mock_run.link_artifact.assert_called()
+        mock_logged_artifact.link.assert_called_once_with(
+            "model-registry/test_registry"
+        )
         mock_run.config.update.assert_called_once_with(config_data)
 
     def test_log_model_artifact_missing_registry_name(self):
@@ -1366,7 +1376,10 @@ class TestLogModelArtifactWithEvalsCoverage:
             model_dir = Path(temp_dir) / "model"
             model_dir.mkdir()
 
-            with pytest.raises(ValueError, match="Registry name must be provided"):
+            with pytest.raises(
+                ValueError,
+                match="registry_name must be provided when link_to_registry is True",
+            ):
                 log_model_artifact_with_evals(
                     run=mock_run,
                     experiment_name="test_exp",

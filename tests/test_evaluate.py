@@ -21,6 +21,10 @@ from sleap_roots_training.evaluate import (
     main,
     plot_custom_img,
     plot_custom_instances,
+    predictions_viz,
+    predictions_viz_multiple_files,
+    predictions_viz_from_sleap_files,
+    visualize_predictions_from_artifacts,
     get_runs_by_sweep_name_pattern,
     fetch_metrics_from_sweep_pattern,
     group_sweep_runs_retroactively,
@@ -1264,7 +1268,7 @@ class TestSweepManagementCoverage:
         mock_run1.sweep.id = "sweep_id_1"
         mock_run1.created_at = "2025-01-15T10:00:00Z"
 
-        mock_get_runs.return_value = [mock_run1]
+        mock_get_runs.return_value = {"sweep_id_1": [mock_run1]}
 
         result = fetch_metrics_from_sweep_pattern(
             name_pattern="test_sweep",
@@ -1288,17 +1292,16 @@ class TestSweepManagementCoverage:
                 "dist.p50": [8.5, 9.2, 7.8],
                 "vis.precision": [0.89, 0.92, 0.87],
                 "sweep_name": ["sweep1", "sweep1", "sweep2"],
+                "sweep_id": ["sweep_123", "sweep_123", "sweep_456"],
                 "created_at": ["2025-01-15"] * 3,
             }
         )
         mock_fetch_metrics.return_value = mock_df
 
         result = find_and_evaluate_recent_sweeps(
-            name_pattern="test_sweep",
+            experiment_prefix="test_sweep",
             days_back=7,
             target_metrics=["dist.p50", "vis.precision"],
-            group_runs=True,
-            group_name_base="test_group",
         )
 
         # Should return aggregated statistics
@@ -1357,10 +1360,15 @@ class TestEvaluateModelEnhancedCoverage:
         mock_labels_pr = MagicMock()
         mock_metrics = {
             "dist.p50": 12.5,
+            "dist.p90": 20.0,
+            "dist.p95": 25.0,
+            "dist.p99": 30.0,
             "dist.avg": 15.0,
             "dist.dists": np.array([[12.5, 25.0]]),
             "vis.precision": 0.85,
+            "vis.recall": 0.80,
             "oks_voc.mAP": 0.70,
+            "oks_voc.mAR": 0.68,
         }
         mock_eval_model.return_value = (mock_labels_pr, mock_metrics)
 
