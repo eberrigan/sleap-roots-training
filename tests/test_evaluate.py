@@ -1136,9 +1136,31 @@ class TestPredictionsVisualizationCoverage:
         mock_wandb.init.assert_called_once()
         mock_fetch_artifact.assert_called_once()  # Called once per group, we have 1 group
 
+    @patch("sleap_roots_training.evaluate.plt")
+    @patch("sleap_roots_training.evaluate.CONFIG")
+    @patch("sleap_roots_training.evaluate.wandb")
     @patch("sleap_roots_training.evaluate.predictions_viz")
-    def test_predictions_viz_multiple_files_coverage(self, mock_predictions_viz):
+    def test_predictions_viz_multiple_files_coverage(
+        self, mock_predictions_viz, mock_wandb, mock_config, mock_plt
+    ):
         """Test predictions_viz_multiple_files for coverage."""
+        # Mock CONFIG values
+        mock_config.__getitem__.side_effect = lambda key: {
+            "project_name": "test_project",
+            "entity_name": "test_entity",
+            "experiment_name": "test_experiment",
+            "registry": "test_registry",
+        }[key]
+
+        # Mock wandb.init to prevent login issues
+        mock_run = MagicMock()
+        mock_wandb.init.return_value = mock_run
+
+        # Mock matplotlib
+        mock_fig = MagicMock()
+        mock_axes = MagicMock()
+        mock_plt.subplots.return_value = (mock_fig, mock_axes)
+
         model_artifacts = ["model1", "model2"]
         test_artifacts = ["test1", "test2"]
         prediction_artifacts = ["pred1", "pred2"]
@@ -1153,6 +1175,9 @@ class TestPredictionsVisualizationCoverage:
             )
 
         # Should call predictions_viz - just check it runs without error
+        mock_wandb.init.assert_called_once()
+        mock_predictions_viz.assert_called()
+        mock_run.finish.assert_called_once()
 
     @patch("sleap_roots_training.evaluate.predictions_viz")
     @patch("sleap_roots_training.evaluate.create_artifact_name")
@@ -1173,9 +1198,24 @@ class TestPredictionsVisualizationCoverage:
 
         # Should create artifact names and call predictions_viz - just check it runs
 
+    @patch("sleap_roots_training.evaluate.CONFIG")
+    @patch("sleap_roots_training.evaluate.wandb")
     @patch("sleap_roots_training.evaluate.predictions_viz_from_sleap_files")
-    def test_visualize_predictions_from_artifacts_coverage(self, mock_viz_from_files):
+    def test_visualize_predictions_from_artifacts_coverage(
+        self, mock_viz_from_files, mock_wandb, mock_config
+    ):
         """Test visualize_predictions_from_artifacts for coverage."""
+        # Mock CONFIG values
+        mock_config.__getitem__.side_effect = lambda key: {
+            "project_name": "test_project",
+            "entity_name": "test_entity",
+            "experiment_name": "test_experiment",
+            "registry": "test_registry",
+        }[key]
+
+        # Mock wandb.init to prevent login issues
+        mock_wandb.init.return_value = MagicMock()
+
         with tempfile.TemporaryDirectory() as temp_dir:
             visualize_predictions_from_artifacts(
                 model_artifact_name="test_model",
@@ -1185,6 +1225,7 @@ class TestPredictionsVisualizationCoverage:
             )
 
         # Just check it runs without error
+        mock_wandb.init.assert_called_once()
 
 
 class TestSweepManagementCoverage:
