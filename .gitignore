@@ -196,6 +196,8 @@ prediction_viz/
 
 # don't add SLEAP data to git (keep large .slp files out)
 *.slp
+# But allow test data .slp files
+!tests/data/**/*.slp
 predictions/
 2025-04-14_generalized_model_eval/
 2025-04-16_generalizable_model_aug_input_scale/
