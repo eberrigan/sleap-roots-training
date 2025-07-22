@@ -45,6 +45,13 @@ pip install -e .[dev]
 wandb login
 ```
 
+### 3. Environment Activation (Windows)
+
+For running tests and development commands on Windows, use:
+```bash
+cd "C:\repos\sleap-roots-training" && source /c/Users/Elizabeth/miniforge3/etc/profile.d/conda.sh && conda activate sleap_v1.4.1
+```
+
 ### 3. Development Notes
 
 - Work from repository root so `sleap_roots_training` imports work correctly
@@ -55,7 +62,7 @@ wandb login
 
 ### Installation
 ```bash
-pip install -e .  # Install in development mode
+pip install -e .[dev]  # Install in development mode
 ```
 
 ### Testing
@@ -166,12 +173,18 @@ make test-imports  # Test imports only
 
 ### Test Structure
 
+**Test Organization Guidelines:**
+- **One-to-one mapping**: For every module `sleap_roots_training/<module>.py`, there is a corresponding test file `tests/test_<module>.py`
+- **Centralized fixtures**: All fixtures are defined in `tests/fixtures.py` and imported by test modules
+- **Real test data**: Test data is stored in `tests/data/` directory with actual SLEAP experiment files
+
+**Test Files:**
 - `tests/test_config.py` - Configuration management tests
 - `tests/test_train.py` - Training workflow tests (unit tests with mocking)
-- `tests/test_sweep_integration.py` - Sweep integration tests with real data
-- `tests/test_evaluate.py` - Evaluation and metrics tests
+- `tests/test_evaluate.py` - Evaluation and metrics tests  
 - `tests/test_models.py` - Model artifact management tests
 - `tests/test_datasets.py` - Dataset artifact tests
+- `tests/test_sweep_integration.py` - Sweep integration tests with real data
 - `tests/test_imports.py` - Basic import verification
 - `tests/conftest.py` - Shared fixtures and test configuration
 - `tests/fixtures.py` - Reusable test fixtures for real data
@@ -231,27 +244,15 @@ def test_my_function(sweep_experiment_data, temp_experiment_dir):
 
 ### CI/CD Integration
 
-Multiple GitHub Actions workflows run automatically on all branches:
-
-**Essential (runs on every push/PR):**
-- **`branch-checks.yml`** - Fast checks for development:
-  - Code formatting validation
-  - Import testing
-  - Basic functionality tests
-  - Cross-platform compatibility check
+Multiple GitHub Actions workflows run automatically:
 
 **Comprehensive (runs on all branches):**
 - **`test-imports.yml`** - Cross-platform import validation:
   - Tests on Ubuntu, Windows, macOS
-  - Python 3.8-3.11 compatibility
+  - Python 3.8 compatibility
   - Lightweight without full SLEAP installation
 
-- **`ci-conda.yml`** - SLEAP environment testing:
-  - Conda-based installation (closest to local dev)
-  - Full SLEAP integration tests
-  - Multi-platform support
-
-**Full Integration (runs on all branches):**
+**Full Integration (runs on changes to main):**
 - **`ci.yml`** - Complete CI pipeline:
   - Full SLEAP installation via pip
   - Comprehensive test suite
@@ -259,10 +260,8 @@ Multiple GitHub Actions workflows run automatically on all branches:
   - Package building verification
 
 **Workflow Priority:**
-1. **`branch-checks.yml`** - Must pass (fast feedback)
-2. **`test-imports.yml`** - Should pass (compatibility)
-3. **`ci-conda.yml`** - Should pass (SLEAP integration)
-4. **`ci.yml`** - Nice to pass (full validation)
+1. **`test-imports.yml`** - Should pass (compatibility)
+2. **`ci.yml`** - Nice to pass (full validation)
 
 ## Data Management
 
