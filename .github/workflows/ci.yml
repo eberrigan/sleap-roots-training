@@ -2,10 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]  # Run on push to main branch only
+    branches: [ "**" ]  # Run on all branches
   pull_request:
     types: [opened, closed]  # Run when PR is opened or closed
-    branches: [ "main" ]  # Run on PRs to main branch
+    branches: [ "**" ]  # Run on PRs to all branches
 
 jobs:
   test:
