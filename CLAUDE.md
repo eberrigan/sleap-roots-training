@@ -274,13 +274,13 @@ When developing or modifying tests, follow this workflow:
 
 Multiple GitHub Actions workflows run automatically:
 
-**Comprehensive (runs on changes to main):**
+**Comprehensive (runs on changes all branches):**
 - **`test-imports.yml`** - Cross-platform import validation:
   - Tests on Ubuntu, Windows, macOS
   - Python 3.8 compatibility
   - Lightweight without full SLEAP installation
 
-**Full Integration (runs on changes to main):**
+**Full Integration (runs on changes all branches):**
 - **`ci.yml`** - Complete CI pipeline:
   - Full SLEAP installation via pip
   - Comprehensive test suite
