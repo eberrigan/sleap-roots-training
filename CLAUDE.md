@@ -81,6 +81,10 @@ make lint            # Check code formatting
 make clean           # Clean build artifacts
 make build           # Build package
 make ci              # Run full CI pipeline locally
+
+# Manual formatting (when make is not available)
+python -m black <file_paths>  # Format specific files
+python -m black tests/        # Format all test files
 ```
 
 ## Architecture
@@ -228,6 +232,30 @@ def test_my_function(sweep_experiment_data, temp_experiment_dir):
 - Minimum coverage threshold: 80%
 - Coverage reports generated in HTML format (`htmlcov/`)
 - XML coverage reports for CI integration (`coverage.xml`)
+
+### Test Development Workflow
+
+When developing or modifying tests, follow this workflow:
+
+1. **Activate environment**: Use the correct conda environment activation
+   ```bash
+   cd "C:\repos\sleap-roots-training" && source /c/Users/Elizabeth/miniforge3/etc/profile.d/conda.sh && conda activate sleap_v1.4.1
+   ```
+
+2. **Run tests**: Execute tests to check current status
+   ```bash
+   python -m pytest --cov=sleap_roots_training --cov-report=term-missing tests/test_<module>.py
+   ```
+
+3. **Format code**: Always format test files before committing
+   ```bash
+   python -m black tests/test_<module>.py tests/fixtures.py
+   ```
+
+4. **Verify formatting**: Ensure code follows project standards
+   ```bash
+   make lint  # or python -m black --check tests/
+   ```
 
 ### Test Categories
 

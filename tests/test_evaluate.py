@@ -706,20 +706,20 @@ class TestGetSweepIdsAdditional:
         """Test warning when no sweep IDs found."""
         mock_api_instance = MagicMock()
         mock_api.return_value = mock_api_instance
-        
+
         # Mock run without sweep ID
         mock_run = MagicMock()
         mock_run.config = {}
         mock_run.sweep = None
-        
+
         mock_api_instance.runs.return_value = [mock_run]
-        
+
         result = get_sweep_ids_for_group_from_runs(
             group_name="test_group",
             entity_name="test_entity",
-            project_name="test_project"
+            project_name="test_project",
         )
-        
+
         assert result == []
         # Verify warning was logged for no sweep IDs
         mock_logging.warning.assert_called_once()
@@ -732,19 +732,17 @@ class TestPlotCustomImg:
     def test_plot_custom_img_basic(self, mock_plt):
         """Test basic image plotting functionality."""
         from sleap_roots_training.evaluate import plot_custom_img
-        
+
         mock_ax = MagicMock()
         test_img = np.zeros((100, 100, 3))
-        
+
         # Call function (parameters: ax, img)
         plot_custom_img(mock_ax, test_img)
-        
+
         # Verify imshow was called
         mock_ax.imshow.assert_called_once()
         # Verify axis was turned off
         mock_ax.axis.assert_called_once_with("off")
-
-
 
 
 class TestGetRunsBySweepNamePattern:
@@ -755,24 +753,22 @@ class TestGetRunsBySweepNamePattern:
         """Test basic sweep name pattern matching."""
         mock_api_instance = MagicMock()
         mock_api.return_value = mock_api_instance
-        
+
         # Create mock runs
         mock_run1 = MagicMock()
         mock_run1.sweep = MagicMock()
         mock_run1.sweep.name = "test_sweep_v001"
-        
+
         mock_run2 = MagicMock()
         mock_run2.sweep = MagicMock()
         mock_run2.sweep.name = "other_sweep_v001"
-        
+
         mock_api_instance.runs.return_value = [mock_run1, mock_run2]
-        
+
         from sleap_roots_training.evaluate import get_runs_by_sweep_name_pattern
-        
-        result = get_runs_by_sweep_name_pattern(
-            name_pattern="test_sweep"
-        )
-        
+
+        result = get_runs_by_sweep_name_pattern(name_pattern="test_sweep")
+
         # Should only return runs matching pattern (may return dict format)
         assert len(result) >= 0  # Just verify function runs
 
@@ -785,14 +781,13 @@ class TestFetchMetricsFromSweepPattern:
     def test_no_runs_found(self, mock_logging, mock_get_runs):
         """Test warning when no runs match pattern."""
         mock_get_runs.return_value = []
-        
+
         from sleap_roots_training.evaluate import fetch_metrics_from_sweep_pattern
-        
+
         result = fetch_metrics_from_sweep_pattern(
-            name_pattern="nonexistent_pattern",
-            target_metrics=["dist.p50"]
+            name_pattern="nonexistent_pattern", target_metrics=["dist.p50"]
         )
-        
+
         # Should return empty dataframe and log warning
         assert len(result) == 0
         mock_logging.warning.assert_called_once()
@@ -805,8 +800,9 @@ class TestAdditionalSimple:
         """Test that additional functions can be imported."""
         from sleap_roots_training.evaluate import (
             find_and_evaluate_recent_sweeps,
-            plot_custom_img
+            plot_custom_img,
         )
+
         # Just verify imports work
         assert find_and_evaluate_recent_sweeps is not None
         assert plot_custom_img is not None
@@ -820,10 +816,10 @@ class TestEvaluateRealDataCoverage:
         test_files = [
             "minimal_instance.pkg.slp",
             "sweep_experiment/train_test_split.v000/train.pkg.slp",
-            "sweep_experiment/train_test_split.v000/val.pkg.slp", 
+            "sweep_experiment/train_test_split.v000/val.pkg.slp",
             "sweep_experiment/train_test_split.v000/test.pkg.slp",
         ]
-        
+
         for test_file in test_files:
             file_path = Path(__file__).parent / "data" / test_file
             assert file_path.exists(), f"Test file not found: {file_path}"
@@ -836,24 +832,29 @@ class TestEvaluateRealDataCoverage:
             "min_tracks_2node.UNet.bottomup_multiclass/training_config.json",
             "sweep_experiment/train_test_split.v000/initial_config_modified_v000.json",
         ]
-        
+
         for config_file in config_files:
             config_path = Path(__file__).parent / "data" / config_file
             assert config_path.exists(), f"Config file not found: {config_path}"
-            
+
             # Load and validate JSON structure
             with open(config_path, "r") as f:
                 config = json.load(f)
-            
+
             assert isinstance(config, dict)
             assert "data" in config
             assert "model" in config
 
     def test_csv_data_structure(self):
         """Test loading real CSV training data."""
-        csv_path = Path(__file__).parent / "data" / "sweep_experiment" / "train_test_splits.csv"
+        csv_path = (
+            Path(__file__).parent
+            / "data"
+            / "sweep_experiment"
+            / "train_test_splits.csv"
+        )
         assert csv_path.exists()
-        
+
         # Load CSV and check structure
         df = pd.read_csv(csv_path)
         assert len(df) > 0
@@ -867,21 +868,21 @@ class TestEvaluateRealDataCoverage:
         """Test get_sweep_ids_for_group_from_runs with realistic scenarios."""
         mock_api_instance = MagicMock()
         mock_api.return_value = mock_api_instance
-        
+
         # Test scenario 1: Runs with valid sweep IDs
         mock_run1 = MagicMock()
         mock_run1.sweep = MagicMock()
         mock_run1.sweep.id = "sweep_abc123"
-        
+
         mock_run2 = MagicMock()
-        mock_run2.sweep = MagicMock() 
+        mock_run2.sweep = MagicMock()
         mock_run2.sweep.id = "sweep_def456"
-        
+
         mock_run3 = MagicMock()
         mock_run3.sweep = None  # No sweep
-        
+
         mock_api_instance.runs.return_value = [mock_run1, mock_run2, mock_run3]
-        
+
         result = get_sweep_ids_for_group_from_runs("test_group")
         assert isinstance(result, list)
         assert len(result) >= 0  # May be sorted/filtered
@@ -890,11 +891,11 @@ class TestEvaluateRealDataCoverage:
         """Test that H5 model files have expected structure."""
         h5_files = [
             "arabidopsis_20DAG_20_D_R8.h5",
-            "canola_7DAG_8ARB11NYTA.h5", 
+            "canola_7DAG_8ARB11NYTA.h5",
             "rice_3DAG_7PX8571.h5",
             "soybean_6DAG_5LD0CB0E.h5",
         ]
-        
+
         for h5_file in h5_files:
             file_path = Path(__file__).parent / "data" / h5_file
             assert file_path.exists(), f"H5 file not found: {file_path}"
@@ -903,20 +904,22 @@ class TestEvaluateRealDataCoverage:
 
     def test_model_directory_best_model(self):
         """Test that model directory has expected best_model.h5."""
-        model_dir = Path(__file__).parent / "data" / "min_tracks_2node.UNet.bottomup_multiclass"
+        model_dir = (
+            Path(__file__).parent / "data" / "min_tracks_2node.UNet.bottomup_multiclass"
+        )
         best_model = model_dir / "best_model.h5"
-        
+
         assert best_model.exists()
         assert best_model.stat().st_size > 1000  # Should be substantial file
-        
+
         # Test training config exists alongside model
         training_config = model_dir / "training_config.json"
         assert training_config.exists()
-        
+
         # Load and validate training config structure
         with open(training_config, "r") as f:
             config = json.load(f)
-        
+
         assert "data" in config
         assert "labels" in config["data"]
         assert "skeletons" in config["data"]["labels"]
@@ -931,7 +934,7 @@ class TestEvaluateEdgeCasesAndErrors:
         mock_api_instance = MagicMock()
         mock_api.return_value = mock_api_instance
         mock_api_instance.runs.return_value = []
-        
+
         # Test with empty API response
         result = get_sweep_ids_for_group_from_runs("nonexistent_group")
         assert result == []
@@ -943,7 +946,7 @@ class TestEvaluateEdgeCasesAndErrors:
         mock_artifact.metadata = {"test_key": 42.0}
         result = get_eval_metadata(mock_artifact, "test_key")
         assert result == 42.0
-        
+
         # Test with missing key (should return default behavior)
         mock_artifact.metadata = {}
         result = get_eval_metadata(mock_artifact, "missing_key")
@@ -956,7 +959,7 @@ class TestEvaluateEdgeCasesAndErrors:
         result1 = create_artifact_name("group1", "v001")
         assert "group1" in result1
         assert "v001" in result1
-        
+
         # Test with special characters
         result2 = create_artifact_name("group-with-dashes", "v002")
         assert isinstance(result2, str)
@@ -966,13 +969,13 @@ class TestEvaluateEdgeCasesAndErrors:
     def test_plot_custom_img_different_formats(self, mock_plt):
         """Test plot_custom_img with different image formats."""
         mock_ax = MagicMock()
-        
+
         # Test grayscale image
         grayscale_img = np.random.randint(0, 255, (100, 100), dtype=np.uint8)
         plot_custom_img(mock_ax, grayscale_img)
         mock_ax.imshow.assert_called()
         mock_ax.axis.assert_called_with("off")
-        
+
         # Test RGB image
         mock_ax.reset_mock()
         rgb_img = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
@@ -984,9 +987,9 @@ class TestEvaluateEdgeCasesAndErrors:
     def test_plot_custom_instances_empty_list(self, mock_plt):
         """Test plotting with empty instances list."""
         mock_ax = MagicMock()
-        
+
         plot_custom_instances([], mock_ax)
-        
+
         # Should handle empty list gracefully
         mock_ax.scatter.assert_not_called()
         mock_ax.plot.assert_not_called()
@@ -996,14 +999,14 @@ class TestEvaluateEdgeCasesAndErrors:
         """Test pattern matching when no runs have sweeps."""
         mock_api_instance = MagicMock()
         mock_api.return_value = mock_api_instance
-        
+
         # Mock runs without sweeps
         mock_run = MagicMock()
         mock_run.sweep = None
         mock_api_instance.runs.return_value = [mock_run]
-        
+
         result = get_runs_by_sweep_name_pattern("pattern")
-        
+
         # Should return empty result
         assert len(result) == 0 or result == {}
 
@@ -1014,31 +1017,42 @@ class TestDataIntegrityAndConsistency:
     def test_config_consistency(self):
         """Test consistency between different config files."""
         initial_config_path = (
-            Path(__file__).parent / "data" / "min_tracks_2node.UNet.bottomup_multiclass" / "initial_config.json"
+            Path(__file__).parent
+            / "data"
+            / "min_tracks_2node.UNet.bottomup_multiclass"
+            / "initial_config.json"
         )
         training_config_path = (
-            Path(__file__).parent / "data" / "min_tracks_2node.UNet.bottomup_multiclass" / "training_config.json"
+            Path(__file__).parent
+            / "data"
+            / "min_tracks_2node.UNet.bottomup_multiclass"
+            / "training_config.json"
         )
-        
+
         with open(initial_config_path, "r") as f:
             initial_config = json.load(f)
-        
+
         with open(training_config_path, "r") as f:
             training_config = json.load(f)
-        
+
         # Both should have same basic structure
         assert "data" in initial_config and "data" in training_config
         assert "model" in initial_config and "model" in training_config
-        
+
         # Training config should have skeletons (more detailed)
         if "skeletons" in training_config["data"]["labels"]:
             assert isinstance(training_config["data"]["labels"]["skeletons"], list)
 
     def test_csv_path_consistency(self):
         """Test that CSV paths point to valid locations."""
-        csv_path = Path(__file__).parent / "data" / "sweep_experiment" / "train_test_splits.csv"
+        csv_path = (
+            Path(__file__).parent
+            / "data"
+            / "sweep_experiment"
+            / "train_test_splits.csv"
+        )
         df = pd.read_csv(csv_path)
-        
+
         for _, row in df.iterrows():
             # Path should be a string
             assert isinstance(row["path"], str)
@@ -1049,14 +1063,20 @@ class TestDataIntegrityAndConsistency:
         """Test that data files have reasonable sizes."""
         files_to_check = [
             ("minimal_instance.pkg.slp", 10000, 5000000),  # 10KB to 5MB
-            ("min_tracks_2node.UNet.bottomup_multiclass/best_model.h5", 1000, 50000000),  # 1KB to 50MB
+            (
+                "min_tracks_2node.UNet.bottomup_multiclass/best_model.h5",
+                1000,
+                50000000,
+            ),  # 1KB to 50MB
         ]
-        
+
         for file_path, min_size, max_size in files_to_check:
             full_path = Path(__file__).parent / "data" / file_path
             if full_path.exists():
                 size = full_path.stat().st_size
-                assert min_size <= size <= max_size, f"File {file_path} has unexpected size: {size} bytes"
+                assert (
+                    min_size <= size <= max_size
+                ), f"File {file_path} has unexpected size: {size} bytes"
 
 
 class TestPredictionsVisualizationCoverage:
@@ -1071,36 +1091,44 @@ class TestPredictionsVisualizationCoverage:
     @patch("sleap_roots_training.evaluate.plt.close")
     @patch("sleap_roots_training.evaluate.plot_custom_img")
     @patch("sleap_roots_training.evaluate.plot_custom_instances")
-    def test_predictions_viz_coverage(self, mock_plot_instances, mock_plot_img, 
-                                     mock_close, mock_savefig, mock_load_file,
-                                     mock_get_predictions, mock_get_test_data,
-                                     mock_fetch_artifact, mock_wandb):
+    def test_predictions_viz_coverage(
+        self,
+        mock_plot_instances,
+        mock_plot_img,
+        mock_close,
+        mock_savefig,
+        mock_load_file,
+        mock_get_predictions,
+        mock_get_test_data,
+        mock_fetch_artifact,
+        mock_wandb,
+    ):
         """Test predictions_viz function for coverage."""
         # Setup mocks
         mock_wandb.init.return_value = MagicMock()
         mock_fetch_artifact.side_effect = [MagicMock(), MagicMock()]
         mock_get_test_data.return_value = MagicMock()
         mock_get_predictions.return_value = MagicMock()
-        
+
         # Mock labeled frame data
         mock_frame = MagicMock()
         mock_frame.image = np.random.rand(100, 100, 3)
         mock_frame.instances = [MagicMock()]
-        
+
         mock_labels_gt = [mock_frame]
         mock_labels_pr = [mock_frame]
         mock_load_file.side_effect = [mock_labels_gt, mock_labels_pr]
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             predictions_viz(
                 model_artifact_name="test_model",
-                test_artifact_name="test_data", 
+                test_artifact_name="test_data",
                 predictions_artifact_name="test_predictions",
                 output_dir=temp_dir,
                 num_frames=1,
-                seed=42
+                seed=42,
             )
-        
+
         # Verify function calls
         mock_wandb.init.assert_called_once()
         assert mock_fetch_artifact.call_count == 2
@@ -1113,9 +1141,9 @@ class TestPredictionsVisualizationCoverage:
     def test_predictions_viz_multiple_files_coverage(self, mock_predictions_viz):
         """Test predictions_viz_multiple_files for coverage."""
         model_artifacts = ["model1", "model2"]
-        test_artifacts = ["test1", "test2"] 
+        test_artifacts = ["test1", "test2"]
         prediction_artifacts = ["pred1", "pred2"]
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             predictions_viz_multiple_files(
                 model_artifact_names=model_artifacts,
@@ -1123,26 +1151,25 @@ class TestPredictionsVisualizationCoverage:
                 predictions_artifact_names=prediction_artifacts,
                 output_dir=temp_dir,
                 num_frames=2,
-                seed=123
+                seed=123,
             )
-        
+
         # Should call predictions_viz for each artifact set
         assert mock_predictions_viz.call_count == 2
 
     @patch("sleap_roots_training.evaluate.predictions_viz")
     @patch("sleap_roots_training.evaluate.create_artifact_name")
-    def test_predictions_viz_from_sleap_files_coverage(self, mock_create_name, mock_predictions_viz):
+    def test_predictions_viz_from_sleap_files_coverage(
+        self, mock_create_name, mock_predictions_viz
+    ):
         """Test predictions_viz_from_sleap_files for coverage."""
         mock_create_name.side_effect = ["model_art", "test_art", "pred_art"]
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             predictions_viz_from_sleap_files(
-                groups=["group1"],
-                versions=["001"],
-                output_dir=temp_dir,
-                num_frames=1
+                groups=["group1"], versions=["001"], output_dir=temp_dir, num_frames=1
             )
-        
+
         # Should create artifact names and call predictions_viz
         assert mock_create_name.call_count == 3
         mock_predictions_viz.assert_called_once()
@@ -1155,9 +1182,9 @@ class TestPredictionsVisualizationCoverage:
                 groups=["group1", "group2"],
                 versions=["001", "002"],
                 output_dir=temp_dir,
-                num_frames=3
+                num_frames=3,
             )
-        
+
         mock_viz_from_files.assert_called_once()
 
 
@@ -1169,25 +1196,24 @@ class TestSweepManagementCoverage:
         """Test get_runs_by_sweep_name_pattern for coverage."""
         mock_api_instance = MagicMock()
         mock_api.return_value = mock_api_instance
-        
+
         # Mock runs with sweeps
         mock_run1 = MagicMock()
         mock_run1.sweep = MagicMock()
         mock_run1.sweep.name = "test_sweep_v001"
         mock_run1.created_at = "2025-01-15T10:00:00Z"
-        
+
         mock_run2 = MagicMock()
         mock_run2.sweep = MagicMock()
         mock_run2.sweep.name = "other_sweep_v001"
         mock_run2.created_at = "2025-01-16T10:00:00Z"
-        
+
         mock_api_instance.runs.return_value = [mock_run1, mock_run2]
-        
+
         result = get_runs_by_sweep_name_pattern(
-            name_pattern="test_sweep",
-            earliest_time="2025-01-01T00:00:00Z"
+            name_pattern="test_sweep", earliest_time="2025-01-01T00:00:00Z"
         )
-        
+
         # Should return runs matching the pattern
         assert isinstance(result, (list, dict))
 
@@ -1197,27 +1223,27 @@ class TestSweepManagementCoverage:
         """Test group_sweep_runs_retroactively for coverage."""
         mock_api_instance = MagicMock()
         mock_api.return_value = mock_api_instance
-        
+
         # Mock runs
         mock_run1 = MagicMock()
         mock_run1.id = "run1"
         mock_run1.name = "test_run_1"
         mock_run1.config = {"sweep_id": "sweep123"}
-        
+
         mock_run2 = MagicMock()
         mock_run2.id = "run2"
-        mock_run2.name = "test_run_2" 
+        mock_run2.name = "test_run_2"
         mock_run2.config = {"sweep_id": "sweep123"}
-        
+
         mock_api_instance.runs.return_value = [mock_run1, mock_run2]
-        
+
         result = group_sweep_runs_retroactively(
             sweep_id="sweep123",
             group_name="test_group",
             entity_name="test_entity",
-            project_name="test_project"
+            project_name="test_project",
         )
-        
+
         # Should return list of updated runs
         assert isinstance(result, list)
         assert len(result) >= 0
@@ -1230,24 +1256,24 @@ class TestSweepManagementCoverage:
         mock_run1.summary = {
             "dist.p50": 10.5,
             "vis.precision": 0.89,
-            "oks_voc.mAP": 0.75
+            "oks_voc.mAP": 0.75,
         }
         mock_run1.config = {"param1": "value1"}
         mock_run1.sweep = MagicMock()
         mock_run1.sweep.name = "sweep1"
         mock_run1.sweep.id = "sweep_id_1"
         mock_run1.created_at = "2025-01-15T10:00:00Z"
-        
+
         mock_get_runs.return_value = [mock_run1]
-        
+
         result = fetch_metrics_from_sweep_pattern(
             name_pattern="test_sweep",
             target_metrics=["dist.p50", "vis.precision"],
             include_config=True,
             group_runs=True,
-            group_name_base="test_group"
+            group_name_base="test_group",
         )
-        
+
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 1
         assert "dist.p50" in result.columns
@@ -1257,22 +1283,24 @@ class TestSweepManagementCoverage:
     def test_find_and_evaluate_recent_sweeps_coverage(self, mock_fetch_metrics):
         """Test find_and_evaluate_recent_sweeps for coverage."""
         # Mock metrics data
-        mock_df = pd.DataFrame({
-            "dist.p50": [8.5, 9.2, 7.8],
-            "vis.precision": [0.89, 0.92, 0.87],
-            "sweep_name": ["sweep1", "sweep1", "sweep2"],
-            "created_at": ["2025-01-15"] * 3
-        })
+        mock_df = pd.DataFrame(
+            {
+                "dist.p50": [8.5, 9.2, 7.8],
+                "vis.precision": [0.89, 0.92, 0.87],
+                "sweep_name": ["sweep1", "sweep1", "sweep2"],
+                "created_at": ["2025-01-15"] * 3,
+            }
+        )
         mock_fetch_metrics.return_value = mock_df
-        
+
         result = find_and_evaluate_recent_sweeps(
             name_pattern="test_sweep",
             days_back=7,
             target_metrics=["dist.p50", "vis.precision"],
             group_runs=True,
-            group_name_base="test_group"
+            group_name_base="test_group",
         )
-        
+
         # Should return aggregated statistics
         assert isinstance(result, pd.DataFrame)
         assert len(result.columns) > 0
@@ -1291,10 +1319,19 @@ class TestEvaluateModelEnhancedCoverage:
     @patch("sleap_roots_training.evaluate.plt.savefig")
     @patch("sleap_roots_training.evaluate.plt.close")
     @patch("sleap_roots_training.evaluate.wandb.Artifact")
-    def test_evaluate_model_enhanced_coverage(self, mock_artifact_class, mock_close, 
-                                            mock_savefig, mock_to_csv, mock_eval_model,
-                                            mock_load_model, mock_get_test_data,
-                                            mock_fetch_artifact, mock_wandb_init, mock_config):
+    def test_evaluate_model_enhanced_coverage(
+        self,
+        mock_artifact_class,
+        mock_close,
+        mock_savefig,
+        mock_to_csv,
+        mock_eval_model,
+        mock_load_model,
+        mock_get_test_data,
+        mock_fetch_artifact,
+        mock_wandb_init,
+        mock_config,
+    ):
         """Test evaluate_model with enhanced coverage."""
         # Setup comprehensive mocks
         mock_config.__getitem__.side_effect = lambda key: {
@@ -1303,20 +1340,20 @@ class TestEvaluateModelEnhancedCoverage:
             "experiment_name": "test_experiment",
             "registry": "test_registry",
         }[key]
-        
+
         mock_run = MagicMock()
         mock_wandb_init.return_value = mock_run
-        
+
         mock_model_artifact = MagicMock()
         mock_model_artifact.download.return_value = "/path/to/model"
         mock_fetch_artifact.return_value = mock_model_artifact
-        
+
         mock_test_data = MagicMock()
         mock_get_test_data.return_value = mock_test_data
-        
+
         mock_predictor = MagicMock()
         mock_load_model.return_value = mock_predictor
-        
+
         mock_labels_pr = MagicMock()
         mock_metrics = {
             "dist.p50": 12.5,
@@ -1326,19 +1363,19 @@ class TestEvaluateModelEnhancedCoverage:
             "oks_voc.mAP": 0.70,
         }
         mock_eval_model.return_value = (mock_labels_pr, mock_metrics)
-        
+
         mock_artifact = MagicMock()
         mock_artifact_class.return_value = mock_artifact
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             # Test with px_per_mm conversion
             labels_pr, metrics, metrics_summary = evaluate_model(
                 model_artifact_name="test_model",
                 test_artifact_name="test_data",
                 output_dir=temp_dir,
-                px_per_mm=10.0
+                px_per_mm=10.0,
             )
-        
+
         # Verify comprehensive function execution
         mock_fetch_artifact.assert_called()
         mock_get_test_data.assert_called_once()
@@ -1348,7 +1385,7 @@ class TestEvaluateModelEnhancedCoverage:
         mock_savefig.assert_called()
         mock_artifact_class.assert_called()
         mock_run.log_artifact.assert_called()
-        
+
         # Verify return values
         assert labels_pr == mock_labels_pr
         assert metrics == mock_metrics
