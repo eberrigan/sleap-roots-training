@@ -348,22 +348,28 @@ class TestVisualization:
 
 Multiple GitHub Actions workflows run automatically:
 
-**Comprehensive (runs on changes all branches):**
-- **`test-imports.yml`** - Cross-platform import validation:
-  - Tests on Ubuntu, Windows, macOS
-  - Python 3.8 compatibility
+**Test Imports (`test-imports.yml`):**
+- **Triggers**: Push to all branches + daily schedule (02:00 UTC)
+- **Platforms**: Ubuntu, Windows, macOS
+- **Purpose**: Cross-platform import validation
+- **Features**:
+  - Python 3.8 compatibility testing
   - Lightweight without full SLEAP installation
+  - Daily monitoring for dependency issues
 
-**Full Integration (runs on changes all branches):**
-- **`ci.yml`** - Complete CI pipeline:
+**CI (`ci.yml`):**
+- **Triggers**: Pull requests (opened, reopened, synchronize)
+- **Platform**: Ubuntu
+- **Purpose**: Complete integration testing
+- **Features**:
   - Full SLEAP installation via pip
   - Comprehensive test suite
   - Code coverage reporting
   - Package building verification
 
 **Workflow Priority:**
-1. **`test-imports.yml`** - Should pass (compatibility)
-2. **`ci.yml`** - Nice to pass (full validation)
+1. **`test-imports.yml`** - Must pass (cross-platform compatibility)
+2. **`ci.yml`** - Must pass for PRs (full validation)
 
 ## Data Management
 
