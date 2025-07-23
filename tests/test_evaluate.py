@@ -1,13 +1,12 @@
 """Tests for sleap_roots_training.evaluate module."""
 
-import pytest
 import tempfile
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from unittest.mock import patch, MagicMock, Mock, mock_open
+from unittest.mock import patch, MagicMock
 import json
-from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
 
 from sleap_roots_training.evaluate import (
     create_artifact_name,

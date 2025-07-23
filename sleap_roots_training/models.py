@@ -2,9 +2,7 @@ import wandb
 import logging
 import re
 
-from typing import List, Optional
-
-from sleap_roots_training.config import CONFIG
+from typing import List
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
