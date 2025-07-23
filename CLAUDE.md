@@ -270,6 +270,33 @@ When developing or modifying tests, follow this workflow:
 - Tests actual workflow with minimal or no mocking
 - Verifies cross-platform compatibility and path handling
 
+### Test Best Practices
+
+**Import Management:**
+- **Always import at module level**: Place all imports at the top of test files, not inside test functions
+- **Example**: Import `matplotlib.pyplot as plt` at the top rather than importing it inside each test
+- **Benefits**: Cleaner code, follows Python conventions, better maintainability
+
+**Figure Management in Tests:**
+- **Close matplotlib figures**: Always call `plt.close('all')` after tests that create visualizations
+- **Prevent test hangs**: Unclosed figures can cause tests to hang or run slowly
+- **Mock when possible**: Use `@patch` decorators to mock matplotlib functions for faster tests
+
+**Example of proper test structure:**
+```python
+import matplotlib.pyplot as plt
+from unittest.mock import patch
+
+class TestVisualization:
+    @patch("module.plt.savefig")
+    def test_visualization_function(self, mock_savefig):
+        # Test code here
+        visualization_function()
+        
+        # Clean up any figures
+        plt.close('all')
+```
+
 ### CI/CD Integration
 
 Multiple GitHub Actions workflows run automatically:
