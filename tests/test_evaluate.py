@@ -857,21 +857,19 @@ class TestErrorHandlingCoverage:
         # Setup mocks
         mock_config.__getitem__.side_effect = lambda key: {
             "project_name": "test_project",
-            "entity_name": "test_entity", 
+            "entity_name": "test_entity",
             "experiment_name": "test_experiment",
-            "registry": "test_registry"
+            "registry": "test_registry",
         }[key]
 
         mock_run = MagicMock()
         mock_wandb_init.return_value = mock_run
 
         # Mock fetch_model_artifact to return None (no metrics found)
-        with patch("sleap_roots_training.evaluate.fetch_model_artifact", return_value=None):
-            result = main(
-                groups=["test_group"],
-                versions=["v001"],
-                tags=["test"]
-            )
+        with patch(
+            "sleap_roots_training.evaluate.fetch_model_artifact", return_value=None
+        ):
+            result = main(groups=["test_group"], versions=["v001"], tags=["test"])
 
         # Should return None when no metrics found
         assert result is None
@@ -899,7 +897,7 @@ class TestErrorHandlingCoverage:
 
         # Mock no labels found
         mock_load_file.return_value = None
-        
+
         mock_fig = MagicMock()
         mock_axes = [[MagicMock()]]
         mock_plt.subplots.return_value = (mock_fig, mock_axes)
@@ -909,7 +907,7 @@ class TestErrorHandlingCoverage:
                 prediction_files_grid=[["test.slp"]],
                 test_group_names=["test"],
                 model_names=["test_model"],
-                output_path="/tmp/test"
+                output_path="/tmp/test",
             )
 
         # Should print message about no labels
@@ -917,9 +915,9 @@ class TestErrorHandlingCoverage:
         mock_plt.close.assert_called()
 
     @patch("sleap_roots_training.evaluate.sleap.load_file")
-    @patch("sleap_roots_training.evaluate.plt") 
+    @patch("sleap_roots_training.evaluate.plt")
     def test_predictions_viz_frame_out_of_range(self, mock_plt, mock_load_file):
-        """Test predictions_viz when frame index is out of range.""" 
+        """Test predictions_viz when frame index is out of range."""
         from sleap_roots_training.evaluate import predictions_viz_from_sleap_files
 
         # Mock labels with no frames
@@ -937,7 +935,7 @@ class TestErrorHandlingCoverage:
                 test_group_names=["test"],
                 model_names=["test_model"],
                 output_path="/tmp/test",
-                frame_idx=5  # Out of range
+                frame_idx=5,  # Out of range
             )
 
         # Should print message about frame out of range
@@ -962,18 +960,21 @@ class TestErrorHandlingCoverage:
             "project_name": "test_project",
             "entity_name": "test_entity",
             "experiment_name": "test_experiment",
-            "registry": "test_registry"
+            "registry": "test_registry",
         }[key]
 
         mock_run = MagicMock()
         mock_wandb_init.return_value = mock_run
 
         # Mock fetch_model_artifact to raise an exception
-        with patch("sleap_roots_training.evaluate.fetch_model_artifact", side_effect=Exception("Test error")):
+        with patch(
+            "sleap_roots_training.evaluate.fetch_model_artifact",
+            side_effect=Exception("Test error"),
+        ):
             result = evaluate_model(
                 model_artifact_name="test_model",
                 test_artifact_name="test_data",
-                px_per_mm=17.0
+                px_per_mm=17.0,
             )
 
         # Should return empty objects on exception
