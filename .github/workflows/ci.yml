@@ -1,11 +1,8 @@
 name: CI
 
 on:
-  push:
-    branches: [ "**" ]  # Run on all branches
   pull_request:
-    types: [opened, closed]  # Run when PR is opened or closed
-    branches: [ "**" ]  # Run on PRs to all branches
+    types: [opened, reopened, synchronize]
 
 jobs:
   test:

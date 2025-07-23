@@ -78,12 +78,19 @@ Common test fixtures are defined in `conftest.py`:
 
 ## CI/CD Integration
 
-Tests are automatically run in GitHub Actions on:
+Tests are automatically run in GitHub Actions:
 
-- **Push/PR to main branch**
-- **Multiple Python versions** (3.8, 3.9, 3.10, 3.11)  
-- **Multiple operating systems** (Ubuntu, Windows, macOS)
-- **Daily scheduled runs** for import testing
+- **test-imports.yml**: 
+  - Push to all branches (immediate feedback)
+  - Daily scheduled runs at 02:00 UTC (dependency monitoring)
+  - Multiple operating systems (Ubuntu, Windows, macOS)
+  - Python 3.8
+  
+- **ci.yml**:
+  - Pull requests only (opened, reopened, synchronized)
+  - Ubuntu platform
+  - Python 3.8
+  - Full test suite with coverage requirements
 
 ## Writing New Tests
 

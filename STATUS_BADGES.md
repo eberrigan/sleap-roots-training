@@ -22,19 +22,22 @@ Add these badges to your README.md to show CI status:
 
 ## Workflow Triggers
 
-All workflows run on:
-- **Push to any branch** - immediate feedback during development
-- **Pull requests to any branch** - validation before merging
-- **Scheduled runs** (imports only) - daily monitoring
+- **Test Imports** (`test-imports.yml`):
+  - **Push to any branch** - immediate feedback during development
+  - **Daily schedule** (02:00 UTC) - monitor for dependency issues
+  
+- **CI** (`ci.yml`):
+  - **Pull requests only** - validation before merging (opened, reopened, synchronized)
+  - Ensures comprehensive testing when changes are ready for review
 
 ## Development Workflow
 
 1. **Create feature branch** - `git checkout -b feature/my-feature`
 2. **Make changes** - edit code, add tests
 3. **Check locally** - `make test`, `make lint`
-4. **Push branch** - triggers all CI workflows
-5. **Monitor CI status** - ensure all checks pass
-6. **Create pull request** - additional validation runs
+4. **Push branch** - triggers `test-imports.yml` for immediate feedback
+5. **Monitor import tests** - ensure cross-platform compatibility
+6. **Create pull request** - triggers `ci.yml` for full validation
 7. **Merge when green** - all workflows must pass
 
 ## Troubleshooting CI Failures
