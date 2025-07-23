@@ -486,8 +486,26 @@ class TestEvaluateModel:
     @patch("sleap_roots_training.evaluate.sleap.load_model")
     @patch("sleap_roots_training.evaluate.sleap.nn.evals.evaluate_model")
     @patch("sleap_roots_training.evaluate.Path.mkdir")
+    @patch("sleap_roots_training.evaluate.plt.figure")
+    @patch("sleap_roots_training.evaluate.plt.savefig")
+    @patch("sleap_roots_training.evaluate.plt.close")
+    @patch("sleap_roots_training.evaluate.plt.axvline")
+    @patch("sleap_roots_training.evaluate.plt.title")
+    @patch("sleap_roots_training.evaluate.plt.xlabel")
+    @patch("sleap_roots_training.evaluate.plt.ylabel")
+    @patch("sleap_roots_training.evaluate.plt.legend")
+    @patch("sleap_roots_training.evaluate.sns.histplot")
     def test_evaluate_model(
         self,
+        mock_histplot,
+        mock_legend,
+        mock_ylabel,
+        mock_xlabel,
+        mock_title,
+        mock_axvline,
+        mock_close,
+        mock_savefig,
+        mock_figure,
         mock_mkdir,
         mock_eval,
         mock_load_model,
@@ -571,8 +589,26 @@ class TestEvaluateModel:
     @patch("sleap_roots_training.evaluate.sleap.load_model")
     @patch("sleap_roots_training.evaluate.sleap.nn.evals.evaluate_model")
     @patch("sleap_roots_training.evaluate.Path.mkdir")
+    @patch("sleap_roots_training.evaluate.plt.figure")
+    @patch("sleap_roots_training.evaluate.plt.savefig")
+    @patch("sleap_roots_training.evaluate.plt.close")
+    @patch("sleap_roots_training.evaluate.plt.axvline")
+    @patch("sleap_roots_training.evaluate.plt.title")
+    @patch("sleap_roots_training.evaluate.plt.xlabel")
+    @patch("sleap_roots_training.evaluate.plt.ylabel")
+    @patch("sleap_roots_training.evaluate.plt.legend")
+    @patch("sleap_roots_training.evaluate.sns.histplot")
     def test_evaluate_model_px_per_mm_none(
         self,
+        mock_histplot,
+        mock_legend,
+        mock_ylabel,
+        mock_xlabel,
+        mock_title,
+        mock_axvline,
+        mock_close,
+        mock_savefig,
+        mock_figure,
         mock_mkdir,
         mock_eval,
         mock_load_model,
@@ -746,6 +782,9 @@ class TestPlotCustomImg:
         mock_ax.imshow.assert_called_once()
         # Verify axis was turned off
         mock_ax.axis.assert_called_once_with("off")
+        
+        # Close any figures to prevent hangs
+        plt.close('all')
 
 
 class TestGetRunsBySweepNamePattern:
@@ -985,6 +1024,9 @@ class TestEvaluateEdgeCasesAndErrors:
         plot_custom_img(mock_ax, rgb_img)
         mock_ax.imshow.assert_called()
         mock_ax.axis.assert_called_with("off")
+        
+        # Close any figures to prevent hangs
+        plt.close('all')
 
     @patch("sleap_roots_training.evaluate.plt")
     def test_plot_custom_instances_empty_list(self, mock_plt):
@@ -992,6 +1034,9 @@ class TestEvaluateEdgeCasesAndErrors:
         mock_ax = MagicMock()
 
         plot_custom_instances([], mock_ax)
+        
+        # Close any figures to prevent hangs
+        plt.close('all')
 
         # Should handle empty list gracefully
         mock_ax.scatter.assert_not_called()
