@@ -6,10 +6,8 @@ import json
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from unittest.mock import patch, MagicMock, Mock, mock_open, call
-from datetime import datetime
+from unittest.mock import patch, MagicMock, mock_open
 import subprocess
-import shutil
 
 from sleap_roots_training.train import (
     load_training_data,
@@ -27,13 +25,8 @@ from sleap_roots_training.train import (
     run_sweep_training,
     main,
 )
-from tests.fixtures import (
-    temp_experiment_dir,
-    mock_models_dir,
-    environment_config,
-    realistic_sweep_config,
-    small_sweep_config,
-)
+
+# Fixtures are imported implicitly via pytest
 
 
 class TestLoadTrainingData:
@@ -128,7 +121,7 @@ class TestLogToWandb:
         mock_run = MagicMock()
         mock_wandb_init.return_value = mock_run
 
-        result = log_to_wandb(
+        log_to_wandb(
             project_name="test_project",
             entity_name="test_entity",
             experiment_name="test_experiment",

@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock, Mock, call
+from unittest.mock import patch, MagicMock, call
 from sleap_roots_training.models import (
     validate_tags,
     fetch_model_artifact_from_experiment,

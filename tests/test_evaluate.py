@@ -22,16 +22,11 @@ from sleap_roots_training.evaluate import (
     plot_custom_instances,
     predictions_viz,
     predictions_viz_multiple_files,
-    predictions_viz_from_sleap_files,
     visualize_predictions_from_artifacts,
     get_runs_by_sweep_name_pattern,
     fetch_metrics_from_sweep_pattern,
     group_sweep_runs_retroactively,
     find_and_evaluate_recent_sweeps,
-)
-from tests.fixtures import (
-    environment_config,
-    mock_models_dir,
 )
 
 
@@ -782,9 +777,9 @@ class TestPlotCustomImg:
         mock_ax.imshow.assert_called_once()
         # Verify axis was turned off
         mock_ax.axis.assert_called_once_with("off")
-        
+
         # Close any figures to prevent hangs
-        plt.close('all')
+        plt.close("all")
 
 
 class TestGetRunsBySweepNamePattern:
@@ -1024,9 +1019,9 @@ class TestEvaluateEdgeCasesAndErrors:
         plot_custom_img(mock_ax, rgb_img)
         mock_ax.imshow.assert_called()
         mock_ax.axis.assert_called_with("off")
-        
+
         # Close any figures to prevent hangs
-        plt.close('all')
+        plt.close("all")
 
     @patch("sleap_roots_training.evaluate.plt")
     def test_plot_custom_instances_empty_list(self, mock_plt):
@@ -1034,9 +1029,9 @@ class TestEvaluateEdgeCasesAndErrors:
         mock_ax = MagicMock()
 
         plot_custom_instances([], mock_ax)
-        
+
         # Close any figures to prevent hangs
-        plt.close('all')
+        plt.close("all")
 
         # Should handle empty list gracefully
         mock_ax.scatter.assert_not_called()
@@ -1161,7 +1156,7 @@ class TestPredictionsVisualizationCoverage:
         mock_fetch_artifact.side_effect = [MagicMock(), MagicMock()]
         mock_get_test_data.return_value = MagicMock()
         mock_get_predictions.return_value = MagicMock()
-        
+
         # Mock matplotlib components
         mock_fig = MagicMock()
         mock_ax = MagicMock()
@@ -1188,9 +1183,9 @@ class TestPredictionsVisualizationCoverage:
         # Verify function calls - just check that it runs without error
         mock_wandb.init.assert_called_once()
         mock_fetch_artifact.assert_called_once()  # Called once per group, we have 1 group
-        
+
         # Close any figures that may have been created to prevent test hangs
-        plt.close('all')
+        plt.close("all")
 
     @patch("sleap_roots_training.evaluate.Path")
     @patch("sleap_roots_training.evaluate.plt")
@@ -1224,9 +1219,7 @@ class TestPredictionsVisualizationCoverage:
         mock_path_instance.mkdir.return_value = None
         mock_path.return_value = mock_path_instance
 
-        model_artifacts = ["model1", "model2"]
-        test_artifacts = ["test1", "test2"]
-        prediction_artifacts = ["pred1", "pred2"]
+        # Test artifacts are not needed in this mocked test
 
         with tempfile.TemporaryDirectory() as temp_dir:
             predictions_viz_multiple_files(
@@ -1241,9 +1234,9 @@ class TestPredictionsVisualizationCoverage:
         mock_wandb.init.assert_called_once()
         mock_run.finish.assert_called_once()
         # Note: predictions_viz may not be called if files don't exist or other conditions aren't met
-        
+
         # Close any figures that may have been created to prevent test hangs
-        plt.close('all')
+        plt.close("all")
 
     @patch("sleap_roots_training.evaluate.predictions_viz_from_sleap_files")
     @patch("sleap_roots_training.evaluate.create_artifact_name")
@@ -1252,15 +1245,12 @@ class TestPredictionsVisualizationCoverage:
     ):
         """Test predictions_viz_from_sleap_files for coverage."""
         mock_create_name.side_effect = ["model_art", "test_art", "pred_art"]
-        
+
         # Mock the function to prevent hanging
         mock_predictions_viz_from_sleap_files.return_value = None
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Import and call the function to test import
-            from sleap_roots_training.evaluate import predictions_viz_from_sleap_files
-            
-            # But call the mock instead to avoid hanging
+            # Call the mock to avoid hanging
             mock_predictions_viz_from_sleap_files(
                 prediction_files_grid=[[Path("file1.slp")]],
                 test_group_names=["group1"],
@@ -1271,9 +1261,9 @@ class TestPredictionsVisualizationCoverage:
 
         # Should create artifact names and call predictions_viz - just check it runs
         mock_predictions_viz_from_sleap_files.assert_called_once()
-        
+
         # Close any figures that may have been created to prevent test hangs
-        plt.close('all')
+        plt.close("all")
 
     @patch("sleap_roots_training.evaluate.plt.close")
     @patch("sleap_roots_training.evaluate.plt.savefig")
@@ -1283,8 +1273,14 @@ class TestPredictionsVisualizationCoverage:
     @patch("sleap_roots_training.evaluate.wandb")
     @patch("sleap_roots_training.evaluate.predictions_viz_from_sleap_files")
     def test_visualize_predictions_from_artifacts_coverage(
-        self, mock_viz_from_files, mock_wandb, mock_config, mock_get_test_data,
-        mock_fetch_artifact, mock_savefig, mock_close
+        self,
+        mock_viz_from_files,
+        mock_wandb,
+        mock_config,
+        mock_get_test_data,
+        mock_fetch_artifact,
+        mock_savefig,
+        mock_close,
     ):
         """Test visualize_predictions_from_artifacts for coverage."""
         # Mock CONFIG values
@@ -1297,7 +1293,7 @@ class TestPredictionsVisualizationCoverage:
 
         # Mock wandb.init to prevent login issues
         mock_wandb.init.return_value = MagicMock()
-        
+
         # Mock artifact functions
         mock_fetch_artifact.return_value = MagicMock()
         mock_get_test_data.return_value = MagicMock()
@@ -1312,9 +1308,9 @@ class TestPredictionsVisualizationCoverage:
 
         # Just check it runs without error
         mock_wandb.init.assert_called_once()
-        
+
         # Close any figures that may have been created to prevent test hangs
-        plt.close('all')
+        plt.close("all")
 
 
 class TestSweepManagementCoverage:

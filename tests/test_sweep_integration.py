@@ -6,9 +6,6 @@ to test the sweep functionality. It includes both mocked tests for isolated
 testing and pure integration tests that test the actual workflow.
 """
 
-import pytest
-import json
-import pandas as pd
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -19,16 +16,6 @@ from sleap_roots_training.train import (
     update_config_with_wandb,
     get_param_combinations,
     get_latest_run,
-)
-
-# Import fixtures from the fixtures module
-from tests.fixtures import (
-    sweep_experiment_data,
-    temp_experiment_dir,
-    realistic_sweep_config,
-    small_sweep_config,
-    mock_models_dir,
-    environment_config,
 )
 
 
