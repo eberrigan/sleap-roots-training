@@ -18,6 +18,16 @@ from sleap_roots_training.train import (
     get_latest_run,
 )
 
+# Import fixtures from the fixtures module
+from tests.fixtures import (
+    sweep_experiment_data,
+    temp_experiment_dir,
+    realistic_sweep_config,
+    small_sweep_config,
+    mock_models_dir,
+    environment_config,
+)
+
 
 class TestSweepIntegrationWithMocks:
     """Integration tests for sweep functionality using real data with mocking."""
