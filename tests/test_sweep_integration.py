@@ -6,9 +6,6 @@ to test the sweep functionality. It includes both mocked tests for isolated
 testing and pure integration tests that test the actual workflow.
 """
 
-import pytest
-import json
-import pandas as pd
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 

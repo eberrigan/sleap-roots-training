@@ -1,11 +1,13 @@
+"""Tests for sleap_roots_training.train module."""
+
 import pytest
 import tempfile
 import json
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from unittest.mock import patch, MagicMock, Mock, mock_open, call
-from datetime import datetime
+from unittest.mock import patch, MagicMock, mock_open
+import subprocess
 
 from sleap_roots_training.train import (
     load_training_data,
@@ -23,6 +25,8 @@ from sleap_roots_training.train import (
     run_sweep_training,
     main,
 )
+
+# Fixtures are imported implicitly via pytest
 
 
 class TestLoadTrainingData:
@@ -117,7 +121,7 @@ class TestLogToWandb:
         mock_run = MagicMock()
         mock_wandb_init.return_value = mock_run
 
-        result = log_to_wandb(
+        log_to_wandb(
             project_name="test_project",
             entity_name="test_entity",
             experiment_name="test_experiment",
@@ -747,6 +751,109 @@ class TestRunSweepTraining:
         assert kwargs["registry_name"] == "test_registry"
 
 
+class TestGetLatestRunAdditional:
+    """Additional tests for get_latest_run function."""
+
+    def test_get_latest_run_multiple_dirs(self):
+        """Test get_latest_run with multiple timestamped directories."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            models_dir = Path(temp_dir)
+
+            # Create multiple run directories with different timestamps
+            dirs = ["run_240101_120000", "run_240102_140000", "run_240102_100000"]
+            for d in dirs:
+                (models_dir / d).mkdir()
+
+            latest = get_latest_run(models_dir)
+            assert latest is not None
+            assert latest.name == "run_240102_140000"  # Latest timestamp
+
+
+class TestRunSweepTrainingAdditional:
+    """Additional tests for run_sweep_training function."""
+
+    @patch("sleap_roots_training.train.wandb.sweep")
+    @patch("sleap_roots_training.train.wandb.agent")
+    @patch("sleap_roots_training.train.make_sweep_train_fn")
+    @patch("sleap_roots_training.train.get_param_combinations")
+    def test_run_sweep_training_random_method(
+        self, mock_get_params, mock_make_fn, mock_agent, mock_sweep
+    ):
+        """Test sweep with random method (undetermined count)."""
+        mock_sweep.return_value = "sweep_id"
+        mock_get_params.return_value = None  # Random method returns None
+        mock_train_fn = MagicMock()
+        mock_make_fn.return_value = mock_train_fn
+
+        sweep_config = {"method": "random", "parameters": {}}
+
+        run_sweep_training(
+            project_name="test",
+            entity_name="test",
+            experiment_name="test",
+            version="1",
+            config_copy={},
+            dir_path=Path("."),
+            model_tags=[],
+            sleap_train_command="",
+            sweep_config=sweep_config,
+            link_to_registry=False,
+            registry_name=None,
+        )
+
+        # Verify agent was called without count
+        call_kwargs = mock_agent.call_args[1]
+        assert "count" not in call_kwargs or call_kwargs["count"] is None
+
+
+class TestMakeSweepTrainFnAdditional:
+    """Additional tests for make_sweep_train_fn."""
+
+    @patch("sleap_roots_training.train.wandb")
+    @patch("sleap_roots_training.train.update_config_with_wandb")
+    @patch("sleap_roots_training.train.execute_training")
+    @patch("sleap_roots_training.train.get_latest_run")
+    @patch("sleap_roots_training.train.logging")
+    @patch("builtins.open", new_callable=mock_open, read_data='{"test": "config"}')
+    def test_sweep_train_fn_no_model_dir(
+        self,
+        mock_file,
+        mock_logging,
+        mock_get_latest_run,
+        mock_execute_training,
+        mock_update_config,
+        mock_wandb,
+    ):
+        """Test sweep train function when model directory is not found."""
+        # Setup mocks
+        mock_wandb.run = MagicMock()
+        mock_wandb.run.id = "test_run_id"
+        mock_wandb.init.return_value = MagicMock()
+        mock_wandb.config = {}
+
+        mock_update_config.return_value = {"updated": "config"}
+        mock_get_latest_run.return_value = None  # No model dir found
+
+        # Create sweep training function
+        train_fn = make_sweep_train_fn(
+            version="1",
+            config_copy={"original": "config"},
+            dir_path=Path("/fake/dir"),
+            sleap_train_command="sleap-train {}",
+            experiment_name="test_experiment",
+            model_tags=["test_tag"],
+            link_to_registry=False,
+            registry_name=None,
+        )
+
+        # Execute and expect error
+        with pytest.raises(FileNotFoundError):
+            train_fn()
+
+        # Verify error was logged
+        mock_logging.error.assert_called()
+
+
 class TestMainFunction:
     """Test suite for main function."""
 
@@ -885,3 +992,406 @@ class TestMainFunction:
                 sweep_config=None,
                 link_to_registry=True,
             )
+
+
+class TestRealDataCoverage:
+    """Tests using real data files to improve coverage."""
+
+    def test_real_model_directory_structure(self):
+        """Test functions with real model directory structure."""
+        test_data_dir = (
+            Path(__file__).parent / "data" / "min_tracks_2node.UNet.bottomup_multiclass"
+        )
+
+        # Test that the directory exists and has expected files
+        assert test_data_dir.exists()
+        assert (test_data_dir / "initial_config.json").exists()
+        assert (test_data_dir / "training_config.json").exists()
+        assert (test_data_dir / "best_model.h5").exists()
+
+    def test_get_param_combinations_realistic(self):
+        """Test parameter combinations with realistic sweep configs."""
+        # Test realistic grid search config
+        realistic_config = {
+            "method": "grid",
+            "parameters": {
+                "data.preprocessing.input_scaling": {"values": [0.5, 1.0, 1.5]},
+                "model.backbone.unet.filters": {"values": [8, 16, 32]},
+                "model.backbone.unet.max_stride": {"values": [16, 32]},
+                "optimization.batch_size": {"values": [2, 4]},
+            },
+        }
+
+        combinations = get_param_combinations(realistic_config)
+        expected = 3 * 3 * 2 * 2  # 36 combinations
+        assert combinations == expected
+
+    def test_get_param_combinations_edge_cases(self):
+        """Test parameter combinations edge cases."""
+        # Empty parameters
+        empty_config = {"method": "grid", "parameters": {}}
+        assert get_param_combinations(empty_config) == 1
+
+        # Single parameter
+        single_config = {
+            "method": "grid",
+            "parameters": {"param1": {"values": [1, 2, 3]}},
+        }
+        assert get_param_combinations(single_config) == 3
+
+        # Random method (should return None)
+        random_config = {
+            "method": "random",
+            "parameters": {"param1": {"values": [1, 2, 3]}},
+        }
+        assert get_param_combinations(random_config) is None
+
+    def test_get_latest_run_realistic_structure(self):
+        """Test get_latest_run with realistic directory structures."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            models_dir = Path(temp_dir)
+
+            # Create realistic run directory structure
+            run_dirs = [
+                "run_250115_120000",
+                "run_250116_143000",
+                "run_250115_180000",
+            ]
+
+            for run_dir in run_dirs:
+                dir_path = models_dir / run_dir
+                dir_path.mkdir()
+                # Add some realistic files
+                (dir_path / "best_model.h5").touch()
+                (dir_path / "metrics.json").touch()
+
+            latest_run = get_latest_run(models_dir)
+            assert latest_run is not None
+            assert latest_run.name == "run_250116_143000"
+
+    def test_get_latest_run_no_valid_dirs(self):
+        """Test get_latest_run with no valid run directories."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            models_dir = Path(temp_dir)
+
+            # Create directories that don't match pattern
+            (models_dir / "not_a_run").mkdir()
+            (models_dir / "also_not_run").mkdir()
+            (models_dir / "run_invalid").mkdir()  # Doesn't match timestamp pattern
+
+            result = get_latest_run(models_dir)
+            assert result is None
+
+    def test_get_latest_run_nonexistent_directory(self):
+        """Test get_latest_run with nonexistent directory."""
+        nonexistent = Path("/definitely/does/not/exist")
+
+        with pytest.raises(FileNotFoundError, match="Models directory not found"):
+            get_latest_run(nonexistent)
+
+    def test_empty_data_structures(self):
+        """Test functions with empty data structures."""
+        # Test empty sweep config
+        empty_config = {"method": "grid", "parameters": {}}
+        result = get_param_combinations(empty_config)
+        assert result == 1
+
+    def test_load_training_data_valid_csv(self):
+        """Test loading valid CSV training data."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = Path(temp_dir) / "test_data.csv"
+            test_data = pd.DataFrame(
+                {
+                    "version": [1, 2],
+                    "path": ["config1.json", "config2.json"],
+                    "labeled_frames": [100, 150],
+                    "split_type": ["train", "val"],
+                }
+            )
+            test_data.to_csv(csv_path, index=False)
+
+            result = load_training_data(str(csv_path))
+
+            assert isinstance(result, pd.DataFrame)
+            assert len(result) == 2
+            assert "version" in result.columns
+
+    def test_get_training_groups_basic(self):
+        """Test basic training group extraction."""
+        df = pd.DataFrame({"version": [1, 1, 2], "path": ["path1", "path2", "path3"]})
+
+        result = get_training_groups(df)
+
+        # It returns a GroupBy object
+        assert hasattr(result, "groups")
+        assert len(result.groups) == 2  # Two unique versions
+        assert 1 in result.groups
+        assert 2 in result.groups
+
+
+class TestAdditionalTrainFunctions:
+    """Additional tests for train.py functions."""
+
+    @patch("sleap_roots_training.train.subprocess.run")
+    def test_execute_training_success(self, mock_run):
+        """Test successful training execution."""
+        mock_run.return_value = MagicMock(returncode=0)
+
+        command = "sleap-train config.json"
+        execute_training(command)
+
+        mock_run.assert_called_once()
+
+    @patch("sleap_roots_training.train.subprocess.run")
+    def test_execute_training_failure(self, mock_run):
+        """Test training execution with failure."""
+        from subprocess import CalledProcessError
+
+        mock_run.side_effect = CalledProcessError(1, "command", stderr="Error message")
+
+        command = "sleap-train invalid_config.json"
+
+        # The function should re-raise the exception after logging
+        with pytest.raises(CalledProcessError):
+            execute_training(command)
+
+        mock_run.assert_called_once()
+
+    @patch("sleap_roots_training.train.wandb")
+    def test_update_config_basic(self, mock_wandb):
+        """Test basic config update with wandb parameters."""
+        mock_wandb.config = {
+            "data.preprocessing.input_scaling": 1.5,
+            "model.backbone.unet.filters": 16,
+            "optimization.batch_size": 8,
+        }
+
+        base_config = {
+            "data": {"preprocessing": {"input_scaling": 0.5}},
+            "model": {"backbone": {"unet": {"filters": 8}}},
+            "optimization": {"batch_size": 4},
+        }
+
+        result = update_config_with_wandb(base_config)
+
+        assert result["data"]["preprocessing"]["input_scaling"] == 1.5
+        assert result["model"]["backbone"]["unet"]["filters"] == 16
+        assert result["optimization"]["batch_size"] == 8
+
+    @patch("sleap_roots_training.train.wandb")
+    def test_update_config_nested_creation(self, mock_wandb):
+        """Test config update that creates nested structures."""
+        mock_wandb.config = {
+            "new.nested.parameter": "test_value",
+            "model.head.new_param": 42,
+        }
+
+        base_config = {"existing": "value"}
+
+        result = update_config_with_wandb(base_config)
+
+        assert result["new"]["nested"]["parameter"] == "test_value"
+        assert result["model"]["head"]["new_param"] == 42
+        assert result["existing"] == "value"
+
+
+class TestRunSingleTrainingCoverage:
+    """Tests to improve coverage of run_single_training function."""
+
+    @patch("sleap_roots_training.train.wandb.config", {})
+    @patch("sleap_roots_training.train.CONFIG")
+    @patch("sleap_roots_training.train.log_to_wandb")
+    @patch("sleap_roots_training.train.execute_training")
+    @patch("sleap_roots_training.train.get_latest_run")
+    @patch("sleap_roots_training.train.log_model_artifact_with_evals")
+    def test_run_single_training_basic_coverage(
+        self,
+        mock_log_artifact,
+        mock_get_latest,
+        mock_execute,
+        mock_log_wandb,
+        mock_config,
+    ):
+        """Test run_single_training to improve coverage."""
+        # Setup mocks
+        mock_config.__getitem__.side_effect = lambda key: {
+            "project_name": "test_project",
+            "entity_name": "test_entity",
+        }[key]
+
+        mock_run = MagicMock()
+        mock_run.id = "test_run_123"
+        mock_log_wandb.return_value = mock_run
+
+        mock_model_dir = MagicMock()
+        mock_model_dir.exists.return_value = True
+        mock_get_latest.return_value = mock_model_dir
+
+        # Create temporary config file
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            config_data = {"test": "config"}
+            with open(config_path, "w") as f:
+                json.dump(config_data, f)
+
+            # Call the function
+            run_single_training(
+                project_name="test_project",
+                entity_name="test_entity",
+                experiment_name="test_exp",
+                version="1",
+                config_path=config_path,
+                config_copy=config_data,
+                dir_path=Path(temp_dir),
+                model_tags=["test"],
+                tags=["integration"],
+                sleap_train_command="sleap-train {}",
+                use_existing_model=False,
+                link_to_registry=True,
+                registry_name="test_registry",
+            )
+
+        # Verify function calls
+        mock_log_wandb.assert_called_once()
+        mock_execute.assert_called_once()
+        mock_get_latest.assert_called_once()
+        mock_log_artifact.assert_called_once()
+        mock_run.finish.assert_called_once()
+
+    @patch("sleap_roots_training.train.wandb.config", {})
+    @patch("sleap_roots_training.train.CONFIG")
+    @patch("sleap_roots_training.train.log_to_wandb")
+    @patch("sleap_roots_training.train.execute_training")
+    @patch("sleap_roots_training.train.get_latest_run")
+    def test_run_single_training_no_model_found(
+        self, mock_get_latest, mock_execute, mock_log_wandb, mock_config
+    ):
+        """Test run_single_training when no model directory is found."""
+        # Setup mocks
+        mock_config.__getitem__.side_effect = lambda key: {
+            "project_name": "test_project",
+            "entity_name": "test_entity",
+        }[key]
+
+        mock_run = MagicMock()
+        mock_log_wandb.return_value = mock_run
+        mock_get_latest.return_value = None  # No model found
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            with open(config_path, "w") as f:
+                json.dump({"test": "config"}, f)
+
+            # Should raise FileNotFoundError when no model found
+            with pytest.raises(
+                FileNotFoundError, match="No existing model directory found"
+            ):
+                run_single_training(
+                    project_name="test_project",
+                    entity_name="test_entity",
+                    experiment_name="test_exp",
+                    version="1",
+                    config_path=config_path,
+                    config_copy={"test": "config"},
+                    dir_path=Path(temp_dir),
+                    model_tags=["test"],
+                    tags=["test"],
+                    sleap_train_command="sleap-train {}",
+                    use_existing_model=False,
+                    link_to_registry=False,
+                    registry_name=None,
+                )
+
+        mock_run.finish.assert_called_once()
+
+
+class TestLogModelArtifactWithEvalsCoverage:
+    """Tests to improve coverage of log_model_artifact_with_evals function."""
+
+    @patch("sleap_roots_training.train.wandb.Artifact")
+    def test_log_model_artifact_with_evals_basic(self, mock_artifact_class):
+        """Test basic functionality of log_model_artifact_with_evals."""
+        mock_run = MagicMock()
+        mock_artifact = MagicMock()
+        mock_artifact_class.return_value = mock_artifact
+
+        # Setup mock so run.log_artifact returns a mock logged artifact with link method
+        mock_logged_artifact = MagicMock()
+        mock_run.log_artifact.return_value = mock_logged_artifact
+
+        # Mock eval function
+        mock_eval_fn = MagicMock()
+        mock_metrics_df = MagicMock()
+        mock_dists_df = MagicMock()
+        mock_visualizations = {"hist": "path.png"}
+        mock_eval_fn.return_value = (
+            mock_metrics_df,
+            mock_dists_df,
+            mock_visualizations,
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_dir = Path(temp_dir) / "model"
+            model_dir.mkdir()
+
+            # Create a training config file
+            config_path = model_dir / "training_config.json"
+            config_data = {"model": {"type": "test"}, "data": {"test": "config"}}
+            with open(config_path, "w") as f:
+                json.dump(config_data, f)
+
+            log_model_artifact_with_evals(
+                run=mock_run,
+                experiment_name="test_exp",
+                model_tags=["test"],
+                model_dir=model_dir,
+                version="1",
+                eval_fn=mock_eval_fn,
+                eval_args={"px_per_mm": 15.0},
+                link_to_registry=True,
+                registry_name="test_registry",
+            )
+
+        # Verify calls
+        mock_eval_fn.assert_called_once()
+        mock_artifact_class.assert_called()
+        mock_run.log_artifact.assert_called()
+        mock_logged_artifact.link.assert_called_once_with(
+            "model-registry/test_registry"
+        )
+        mock_run.config.update.assert_called_once_with(config_data)
+
+    def test_log_model_artifact_missing_registry_name(self):
+        """Test error when registry linking requested but no registry name provided."""
+        mock_run = MagicMock()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_dir = Path(temp_dir) / "model"
+            model_dir.mkdir()
+
+            with pytest.raises(
+                ValueError,
+                match="registry_name must be provided when link_to_registry is True",
+            ):
+                log_model_artifact_with_evals(
+                    run=mock_run,
+                    experiment_name="test_exp",
+                    model_tags=["test"],
+                    model_dir=model_dir,
+                    version="1",
+                    eval_fn=None,
+                    eval_args={},
+                    link_to_registry=True,
+                    registry_name=None,  # Missing registry name
+                )
+
+
+class TestLinkToRegistryErrorHandling:
+    """Test error handling in registry linking."""
+
+    def test_registry_error_handling_functions_exist(self):
+        """Test that error handling functions exist."""
+        from sleap_roots_training.train import log_model_artifact_with_evals
+
+        # Just test that the function exists and can be imported
+        assert log_model_artifact_with_evals is not None

@@ -11,7 +11,6 @@ from matplotlib.patches import ConnectionPatch
 from pathlib import Path
 from typing import List, Optional, Dict
 from wandb.sdk.wandb_run import Run
-from wandb.sdk.artifacts.artifact import Artifact
 
 from sleap_roots_training.config import CONFIG
 

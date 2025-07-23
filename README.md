@@ -192,17 +192,19 @@ The project uses streamlined GitHub Actions workflows for comprehensive testing:
    - **Runs on**: All platforms (Ubuntu, Windows, macOS)
    - **Python**: 3.8
    - **SLEAP**: PyPI version
-   - **Triggers**: Every push and PR
+   - **Triggers**: 
+     - Push to all branches
+     - Daily schedule at 02:00 UTC
 
 2. **CI** (`ci.yml`)
    - **Purpose**: Full integration testing with coverage
-   - **Runs on**: Ubuntu (primary)
+   - **Runs on**: Ubuntu
    - **Python**: 3.8
    - **SLEAP**: PyPI version
    - **Jobs**: 
      - **test**: Testing, linting, coverage (80% threshold), Codecov upload
      - **build**: Package building and validation
-   - **Triggers**: Every push and PR
+   - **Triggers**: Pull requests (opened, reopened, synchronized)
 
 ### Why This Setup?
 
@@ -211,7 +213,9 @@ The project uses streamlined GitHub Actions workflows for comprehensive testing:
 - **Conda locally**: Developers use conda for full GPU support and dependencies (any Python 3.7-3.9)
 - **Streamlined workflows**: Fast feedback with comprehensive coverage
 
-All workflows run on every push and pull request to ensure code quality.
+The workflows are optimized for efficient resource usage:
+- **test-imports.yml** runs on every push for immediate feedback and daily for dependency monitoring
+- **ci.yml** runs only on pull requests to validate changes before merging
 
 ## Documentation
 

@@ -1,6 +1,6 @@
 import yaml
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 # Define the path to the config file
 CONFIG_PATH = Path(__file__).parent / "config.yaml"

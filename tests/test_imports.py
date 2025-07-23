@@ -16,12 +16,12 @@ def test_package_import():
 def test_excluded_directories():
     """Ensure helper_functions and tests are not part of the installed package."""
     with pytest.raises(ModuleNotFoundError):
-        import helper_functions  # Should fail since it's excluded
+        import helper_functions  # noqa: F401 - Should fail since it's excluded
 
     # Note: tests module may be importable in development environment
     # This test is more relevant in a built/installed package
     try:
-        import tests
+        import tests  # noqa: F401
 
         # If we can import tests, that's okay in development mode
         # The exclusion is handled in the package building process

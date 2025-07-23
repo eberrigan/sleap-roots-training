@@ -1,8 +1,7 @@
 import pytest
 import tempfile
-import wandb
 from pathlib import Path
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, MagicMock
 
 from sleap_roots_training.datasets import make_dataset_artifact
 
@@ -168,7 +167,7 @@ class TestMakeDatasetArtifact:
                 "sleap_roots_training.datasets.wandb.Artifact",
                 return_value=mock_artifact,
             ):
-                result = make_dataset_artifact(
+                make_dataset_artifact(
                     artifact_name="test_artifact",
                     dataset_path=str(dataset_path),
                     tags=["tag1", "tag2"],
@@ -275,7 +274,7 @@ class TestMakeDatasetArtifact:
                 "sleap_roots_training.datasets.wandb.Artifact",
                 return_value=mock_artifact,
             ):
-                result = make_dataset_artifact(
+                make_dataset_artifact(
                     artifact_name="test_artifact",
                     dataset_path=str(dataset_path),
                     link_to_registry=True,
@@ -286,7 +285,7 @@ class TestMakeDatasetArtifact:
                     f"Dataset artifact created: test_artifact from {dataset_path.as_posix()}."
                 )
                 mock_logging.info.assert_any_call(
-                    f"Linking test_artifact to registry test_entity-org/wandb-registry-test_registry/test_collection."
+                    "Linking test_artifact to registry test_entity-org/wandb-registry-test_registry/test_collection."
                 )
                 mock_logging.info.assert_any_call("W&B run finished successfully.")
 
@@ -316,7 +315,7 @@ class TestMakeDatasetArtifact:
                 "sleap_roots_training.datasets.wandb.Artifact",
                 return_value=mock_artifact,
             ):
-                result = make_dataset_artifact(
+                make_dataset_artifact(
                     artifact_name="test_artifact", dataset_path=dataset_path_str
                 )
 

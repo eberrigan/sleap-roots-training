@@ -3,8 +3,6 @@ name: Test Imports
 on:
   push:
     branches: [ "**" ]  # Run on all branches
-  pull_request:
-    branches: [ "**" ]  # Run on PRs to any branch
   schedule:
     # Run daily at 02:00 UTC
     - cron: '0 2 * * *'

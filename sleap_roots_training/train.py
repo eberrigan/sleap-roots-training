@@ -2,7 +2,6 @@ import pandas as pd
 import json
 import wandb
 import subprocess
-import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 import sleap
@@ -17,7 +16,6 @@ from datetime import datetime
 from functools import reduce
 
 from sleap_roots_training.config import CONFIG
-from sleap_roots_training.models import fetch_model_artifact_and_link_to_registry
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

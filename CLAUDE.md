@@ -45,7 +45,57 @@ pip install -e .[dev]
 wandb login
 ```
 
-### 3. Development Notes
+### 3. Environment Activation
+
+#### Setting Environment Variables
+
+Before running commands, set these environment variables based on your system:
+
+**Windows:**
+```bash
+# Set these variables to match your system
+set SLEAP_REPO_PATH=C:\path\to\sleap-roots-training
+set CONDA_PATH=C:\path\to\miniforge3  # or Anaconda3, Miniconda3, etc.
+set SLEAP_ENV_NAME=sleap  # or sleap_v1.4.1, or your custom env name
+
+# Example with typical values:
+set SLEAP_REPO_PATH=C:\Users\%USERNAME%\repos\sleap-roots-training
+set CONDA_PATH=C:\Users\%USERNAME%\miniforge3
+set SLEAP_ENV_NAME=sleap_v1.4.1
+```
+
+**Linux/macOS:**
+```bash
+# Set these variables to match your system
+export SLEAP_REPO_PATH=/path/to/sleap-roots-training
+export CONDA_PATH=/path/to/miniforge3  # or anaconda3, miniconda3, etc.
+export SLEAP_ENV_NAME=sleap  # or sleap_v1.4.1, or your custom env name
+
+# Example with typical values:
+export SLEAP_REPO_PATH=$HOME/repos/sleap-roots-training
+export CONDA_PATH=$HOME/miniforge3
+export SLEAP_ENV_NAME=sleap_v1.4.1
+```
+
+#### Activation Commands
+
+**Windows:**
+```bash
+cd "%SLEAP_REPO_PATH%" && source %CONDA_PATH%/etc/profile.d/conda.sh && conda activate %SLEAP_ENV_NAME%
+```
+
+**Linux/macOS:**
+```bash
+cd "$SLEAP_REPO_PATH" && source $CONDA_PATH/etc/profile.d/conda.sh && conda activate $SLEAP_ENV_NAME
+```
+
+**Note**: Adjust paths based on your conda installation:
+- `miniforge3` for Miniforge users
+- `anaconda3` for Anaconda users  
+- `miniconda3` for Miniconda users
+- Custom path if installed elsewhere
+
+### 4. Development Notes
 
 - Work from repository root so `sleap_roots_training` imports work correctly
 - Use separate branches for different experiments
@@ -55,7 +105,7 @@ wandb login
 
 ### Installation
 ```bash
-pip install -e .  # Install in development mode
+pip install -e .[dev]  # Install in development mode
 ```
 
 ### Testing
@@ -74,6 +124,10 @@ make lint            # Check code formatting
 make clean           # Clean build artifacts
 make build           # Build package
 make ci              # Run full CI pipeline locally
+
+# Manual formatting (when make is not available)
+python -m black <file_paths>  # Format specific files
+python -m black tests/        # Format all test files
 ```
 
 ## Architecture
@@ -166,12 +220,18 @@ make test-imports  # Test imports only
 
 ### Test Structure
 
+**Test Organization Guidelines:**
+- **One-to-one mapping**: For every module `sleap_roots_training/<module>.py`, there is a corresponding test file `tests/test_<module>.py`
+- **Centralized fixtures**: All fixtures are defined in `tests/fixtures.py` and imported by test modules
+- **Real test data**: Test data is stored in `tests/data/` directory with actual SLEAP experiment files
+
+**Test Files:**
 - `tests/test_config.py` - Configuration management tests
 - `tests/test_train.py` - Training workflow tests (unit tests with mocking)
-- `tests/test_sweep_integration.py` - Sweep integration tests with real data
-- `tests/test_evaluate.py` - Evaluation and metrics tests
+- `tests/test_evaluate.py` - Evaluation and metrics tests  
 - `tests/test_models.py` - Model artifact management tests
 - `tests/test_datasets.py` - Dataset artifact tests
+- `tests/test_sweep_integration.py` - Sweep integration tests with real data
 - `tests/test_imports.py` - Basic import verification
 - `tests/conftest.py` - Shared fixtures and test configuration
 - `tests/fixtures.py` - Reusable test fixtures for real data
@@ -216,6 +276,34 @@ def test_my_function(sweep_experiment_data, temp_experiment_dir):
 - Coverage reports generated in HTML format (`htmlcov/`)
 - XML coverage reports for CI integration (`coverage.xml`)
 
+### Test Development Workflow
+
+When developing or modifying tests, follow this workflow:
+
+1. **Activate environment**: Use the correct conda environment activation
+   ```bash
+   # Windows:
+   cd "%SLEAP_REPO_PATH%" && source %CONDA_PATH%/etc/profile.d/conda.sh && conda activate %SLEAP_ENV_NAME%
+   
+   # Linux/macOS:
+   cd "$SLEAP_REPO_PATH" && source $CONDA_PATH/etc/profile.d/conda.sh && conda activate $SLEAP_ENV_NAME
+   ```
+
+2. **Run tests**: Execute tests to check current status
+   ```bash
+   python -m pytest --cov=sleap_roots_training --cov-report=term-missing tests/test_<module>.py
+   ```
+
+3. **Format code**: Always format test files before committing
+   ```bash
+   python -m black tests/test_<module>.py tests/fixtures.py
+   ```
+
+4. **Verify formatting**: Ensure code follows project standards
+   ```bash
+   make lint  # or python -m black --check tests/
+   ```
+
 ### Test Categories
 
 **Unit Tests (`test_train.py`):**
@@ -229,40 +317,59 @@ def test_my_function(sweep_experiment_data, temp_experiment_dir):
 - Tests actual workflow with minimal or no mocking
 - Verifies cross-platform compatibility and path handling
 
+### Test Best Practices
+
+**Import Management:**
+- **Always import at module level**: Place all imports at the top of test files, not inside test functions
+- **Example**: Import `matplotlib.pyplot as plt` at the top rather than importing it inside each test
+- **Benefits**: Cleaner code, follows Python conventions, better maintainability
+
+**Figure Management in Tests:**
+- **Close matplotlib figures**: Always call `plt.close('all')` after tests that create visualizations
+- **Prevent test hangs**: Unclosed figures can cause tests to hang or run slowly
+- **Mock when possible**: Use `@patch` decorators to mock matplotlib functions for faster tests
+
+**Example of proper test structure:**
+```python
+import matplotlib.pyplot as plt
+from unittest.mock import patch
+
+class TestVisualization:
+    @patch("module.plt.savefig")
+    def test_visualization_function(self, mock_savefig):
+        # Test code here
+        visualization_function()
+        
+        # Clean up any figures
+        plt.close('all')
+```
+
 ### CI/CD Integration
 
-Multiple GitHub Actions workflows run automatically on all branches:
+Multiple GitHub Actions workflows run automatically:
 
-**Essential (runs on every push/PR):**
-- **`branch-checks.yml`** - Fast checks for development:
-  - Code formatting validation
-  - Import testing
-  - Basic functionality tests
-  - Cross-platform compatibility check
-
-**Comprehensive (runs on all branches):**
-- **`test-imports.yml`** - Cross-platform import validation:
-  - Tests on Ubuntu, Windows, macOS
-  - Python 3.8-3.11 compatibility
+**Test Imports (`test-imports.yml`):**
+- **Triggers**: Push to all branches + daily schedule (02:00 UTC)
+- **Platforms**: Ubuntu, Windows, macOS
+- **Purpose**: Cross-platform import validation
+- **Features**:
+  - Python 3.8 compatibility testing
   - Lightweight without full SLEAP installation
+  - Daily monitoring for dependency issues
 
-- **`ci-conda.yml`** - SLEAP environment testing:
-  - Conda-based installation (closest to local dev)
-  - Full SLEAP integration tests
-  - Multi-platform support
-
-**Full Integration (runs on all branches):**
-- **`ci.yml`** - Complete CI pipeline:
+**CI (`ci.yml`):**
+- **Triggers**: Pull requests (opened, reopened, synchronize)
+- **Platform**: Ubuntu
+- **Purpose**: Complete integration testing
+- **Features**:
   - Full SLEAP installation via pip
   - Comprehensive test suite
   - Code coverage reporting
   - Package building verification
 
 **Workflow Priority:**
-1. **`branch-checks.yml`** - Must pass (fast feedback)
-2. **`test-imports.yml`** - Should pass (compatibility)
-3. **`ci-conda.yml`** - Should pass (SLEAP integration)
-4. **`ci.yml`** - Nice to pass (full validation)
+1. **`test-imports.yml`** - Must pass (cross-platform compatibility)
+2. **`ci.yml`** - Must pass for PRs (full validation)
 
 ## Data Management
 
