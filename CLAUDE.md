@@ -45,14 +45,57 @@ pip install -e .[dev]
 wandb login
 ```
 
-### 3. Environment Activation (Windows)
+### 3. Environment Activation
 
-For running tests and development commands on Windows, use:
+#### Setting Environment Variables
+
+Before running commands, set these environment variables based on your system:
+
+**Windows:**
 ```bash
-cd "C:\repos\sleap-roots-training" && source /c/Users/Elizabeth/miniforge3/etc/profile.d/conda.sh && conda activate sleap_v1.4.1
+# Set these variables to match your system
+set SLEAP_REPO_PATH=C:\path\to\sleap-roots-training
+set CONDA_PATH=C:\path\to\miniforge3  # or Anaconda3, Miniconda3, etc.
+set SLEAP_ENV_NAME=sleap  # or sleap_v1.4.1, or your custom env name
+
+# Example with typical values:
+set SLEAP_REPO_PATH=C:\Users\%USERNAME%\repos\sleap-roots-training
+set CONDA_PATH=C:\Users\%USERNAME%\miniforge3
+set SLEAP_ENV_NAME=sleap_v1.4.1
 ```
 
-### 3. Development Notes
+**Linux/macOS:**
+```bash
+# Set these variables to match your system
+export SLEAP_REPO_PATH=/path/to/sleap-roots-training
+export CONDA_PATH=/path/to/miniforge3  # or anaconda3, miniconda3, etc.
+export SLEAP_ENV_NAME=sleap  # or sleap_v1.4.1, or your custom env name
+
+# Example with typical values:
+export SLEAP_REPO_PATH=$HOME/repos/sleap-roots-training
+export CONDA_PATH=$HOME/miniforge3
+export SLEAP_ENV_NAME=sleap_v1.4.1
+```
+
+#### Activation Commands
+
+**Windows:**
+```bash
+cd "%SLEAP_REPO_PATH%" && source %CONDA_PATH%/etc/profile.d/conda.sh && conda activate %SLEAP_ENV_NAME%
+```
+
+**Linux/macOS:**
+```bash
+cd "$SLEAP_REPO_PATH" && source $CONDA_PATH/etc/profile.d/conda.sh && conda activate $SLEAP_ENV_NAME
+```
+
+**Note**: Adjust paths based on your conda installation:
+- `miniforge3` for Miniforge users
+- `anaconda3` for Anaconda users  
+- `miniconda3` for Miniconda users
+- Custom path if installed elsewhere
+
+### 4. Development Notes
 
 - Work from repository root so `sleap_roots_training` imports work correctly
 - Use separate branches for different experiments
@@ -239,7 +282,11 @@ When developing or modifying tests, follow this workflow:
 
 1. **Activate environment**: Use the correct conda environment activation
    ```bash
-   cd "C:\repos\sleap-roots-training" && source /c/Users/Elizabeth/miniforge3/etc/profile.d/conda.sh && conda activate sleap_v1.4.1
+   # Windows:
+   cd "%SLEAP_REPO_PATH%" && source %CONDA_PATH%/etc/profile.d/conda.sh && conda activate %SLEAP_ENV_NAME%
+   
+   # Linux/macOS:
+   cd "$SLEAP_REPO_PATH" && source $CONDA_PATH/etc/profile.d/conda.sh && conda activate $SLEAP_ENV_NAME
    ```
 
 2. **Run tests**: Execute tests to check current status
