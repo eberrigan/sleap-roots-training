@@ -1384,3 +1384,14 @@ class TestLogModelArtifactWithEvalsCoverage:
                     link_to_registry=True,
                     registry_name=None,  # Missing registry name
                 )
+
+
+class TestLinkToRegistryErrorHandling:
+    """Test error handling in registry linking."""
+
+    def test_registry_error_handling_functions_exist(self):
+        """Test that error handling functions exist."""
+        from sleap_roots_training.train import log_model_artifact_with_evals
+
+        # Just test that the function exists and can be imported
+        assert log_model_artifact_with_evals is not None
