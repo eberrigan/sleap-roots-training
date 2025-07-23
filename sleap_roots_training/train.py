@@ -15,7 +15,7 @@ from pathlib import Path
 from datetime import datetime
 from functools import reduce
 
-from sleap_roots_training.config import CONFIG
+from sleap_roots_training.config_new import CONFIG
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from sleap_roots_training.config import CONFIG
+from sleap_roots_training.config_new import CONFIG
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
