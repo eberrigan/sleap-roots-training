@@ -322,8 +322,16 @@ def get_latest_run(models_dir: Path) -> Optional[Path]:
                 )  # Store timestamp and full path
 
     if not valid_dirs:
-        logging.error("No valid directories found in models folder.")
-        return None  # No valid directories found
+        # Fallback: configs may set a fixed `run_name` (no timestamp), in which
+        # case SLEAP creates `<models_dir>/<run_name>/` rather than a
+        # timestamped subdir. Pick the most recently modified subdir instead.
+        subdirs = [p for p in models_dir.iterdir() if p.is_dir()]
+        if not subdirs:
+            logging.error("No subdirectories found in models folder.")
+            return None
+        latest_run = sorted(subdirs, key=lambda p: p.stat().st_mtime, reverse=True)[0]
+        logging.info(f"Latest run directory (mtime fallback): {latest_run}")
+        return latest_run
 
     # Sort by timestamp (latest first) and return the latest directory
     latest_run = sorted(valid_dirs, key=lambda x: x[0], reverse=True)[0][1]
@@ -399,8 +407,11 @@ def log_model_artifact_with_evals(
         with open(training_config_path, "r") as f:
             training_config = json.load(f)
 
-        # Update the W&B run configuration
-        run.config.update(training_config)
+        # Update the W&B run configuration. allow_val_change=True is required
+        # because sleap-train mutates the config during training (e.g., appends
+        # entries to data.labels.search_path_hints), and the keys we set on
+        # init() are still present in wandb.config when we update here.
+        run.config.update(training_config, allow_val_change=True)
         logging.info("W&B run configuration updated with training configuration.")
 
     # Create artifact

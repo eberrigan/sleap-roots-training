@@ -64,9 +64,15 @@ def update_config(**kwargs: Any) -> None:
 
 
 def reset_config() -> None:
-    """Resets the configuration to the default settings."""
-    global CONFIG
-    CONFIG = DEFAULT_CONFIG.copy()
+    """Resets the configuration to the default settings.
+
+    Mutates the existing CONFIG dict in place rather than rebinding, so other
+    modules that did `from sleap_roots_training.config import CONFIG` continue
+    to see the same object after a reset (rebinding would leave their imported
+    reference pointing at the stale pre-reset dict).
+    """
+    CONFIG.clear()
+    CONFIG.update(DEFAULT_CONFIG)
     save_config(CONFIG)
     print("Configuration has been reset to default values.")
 
