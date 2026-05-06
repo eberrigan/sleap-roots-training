@@ -1,6 +1,6 @@
 collection_name: null
 entity_name: eberrigan-salk-institute-for-biological-studies
-experiment_name: 20250717_plate_medicago_primary_sweep_receptive_field
-job_type: null
+experiment_name: null
+job_type: promote_registry_artifact
 project_name: sleap-roots
 registry: sleap-roots-models
