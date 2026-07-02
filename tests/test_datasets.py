@@ -11,6 +11,13 @@ from tests.fixtures import embedded_package, nonembedded_package, _build_tiny_la
 class TestMakeDatasetArtifact:
     """Test suite for make_dataset_artifact function."""
 
+    @pytest.fixture(autouse=True)
+    def _bypass_embedding_guard(self):
+        with patch(
+            "sleap_roots_training.datasets.has_embedded_images", return_value=True
+        ):
+            yield
+
     @patch("sleap_roots_training.datasets.wandb.init")
     @patch("sleap_roots_training.datasets.CONFIG")
     def test_make_dataset_artifact_basic(self, mock_config, mock_wandb_init):
@@ -440,3 +447,87 @@ class TestInspectPackage:
             inspect_package(out, search_paths=[str(moved)])["recoverable_via"]
             == "referenced_videos"
         )
+
+
+class TestEmbeddingGuardrail:
+    """Tests for the require_embedded_images guardrail in make_dataset_artifact."""
+
+    @patch("sleap_roots_training.datasets.wandb.init")
+    @patch("sleap_roots_training.datasets.CONFIG")
+    @patch("sleap_roots_training.datasets.has_embedded_images", return_value=False)
+    def test_raises_on_nonembedded_by_default(
+        self, mock_embed, mock_config, mock_wandb_init
+    ):
+        from sleap_roots_training.datasets import make_dataset_artifact
+
+        mock_config.__getitem__.side_effect = lambda k: "x"
+        with pytest.raises(ValueError, match="no embedded images"):
+            make_dataset_artifact(artifact_name="a", dataset_path="/tmp/broken.slp")
+        # Guardrail runs before wandb.init -> no orphan run.
+        mock_wandb_init.assert_not_called()
+
+    @patch("sleap_roots_training.datasets.wandb.init")
+    @patch("sleap_roots_training.datasets.CONFIG")
+    @patch("sleap_roots_training.datasets.has_embedded_images", return_value=False)
+    def test_warns_and_proceeds_when_disabled(
+        self, mock_embed, mock_config, mock_wandb_init
+    ):
+        from sleap_roots_training.datasets import make_dataset_artifact
+
+        mock_config.__getitem__.side_effect = lambda key: {
+            "project_name": "p",
+            "entity_name": "e",
+            "experiment_name": "x",
+            "registry": "r",
+            "collection_name": "c",
+        }[key]
+        mock_run = MagicMock()
+        mock_wandb_init.return_value = mock_run
+        mock_artifact = MagicMock()
+        mock_artifact.metadata = {}
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "broken.slp"
+            p.write_text("x")
+            with patch(
+                "sleap_roots_training.datasets.wandb.Artifact",
+                return_value=mock_artifact,
+            ):
+                result = make_dataset_artifact(
+                    artifact_name="a",
+                    dataset_path=str(p),
+                    require_embedded_images=False,
+                )
+        mock_wandb_init.assert_called_once()
+        assert result == mock_artifact
+
+    @patch("sleap_roots_training.datasets.wandb.init")
+    @patch("sleap_roots_training.datasets.CONFIG")
+    @patch("sleap_roots_training.datasets.has_embedded_images", return_value=True)
+    def test_merges_metadata(self, mock_embed, mock_config, mock_wandb_init):
+        from sleap_roots_training.datasets import make_dataset_artifact
+
+        mock_config.__getitem__.side_effect = lambda key: {
+            "project_name": "p",
+            "entity_name": "e",
+            "experiment_name": "x",
+            "registry": "r",
+            "collection_name": "c",
+        }[key]
+        mock_run = MagicMock()
+        mock_wandb_init.return_value = mock_run
+        mock_artifact = MagicMock()
+        mock_artifact.metadata = {}
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "ok.pkg.slp"
+            p.write_text("x")
+            with patch(
+                "sleap_roots_training.datasets.wandb.Artifact",
+                return_value=mock_artifact,
+            ):
+                make_dataset_artifact(
+                    artifact_name="a",
+                    dataset_path=str(p),
+                    metadata={"images_embedded": True, "repaired_from": "v0"},
+                )
+        assert mock_artifact.metadata["images_embedded"] is True
+        assert mock_artifact.metadata["repaired_from"] == "v0"

@@ -190,6 +190,8 @@ def make_dataset_artifact(
     link_to_registry: bool = False,
     description: Optional[str] = None,
     tags: Optional[List[str]] = None,
+    require_embedded_images: bool = True,
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> wandb.Artifact:
     """Create a dataset artifact from the training data.
 
@@ -199,6 +201,10 @@ def make_dataset_artifact(
         link_to_registry: Whether to link the artifact to the registry.
         description: A description of the artifact.
         tags: A list of tags for the artifact.
+        require_embedded_images: Whether to refuse (raise) when the package at
+            `dataset_path` lacks embedded images. If False, a warning is logged and
+            registration proceeds anyway.
+        metadata: Additional metadata to merge into the artifact's metadata dict.
 
     Returns:
         The created dataset artifact.
@@ -210,6 +216,20 @@ def make_dataset_artifact(
     REGISTRY = CONFIG["registry"]
     COLLECTION_NAME = CONFIG["collection_name"]
 
+    # Guardrail: refuse to register a package that lacks embedded images, since it
+    # cannot be used for remote training. Runs before wandb.init to avoid orphan runs.
+    dataset_path = Path(dataset_path)
+    if not has_embedded_images(dataset_path.as_posix()):
+        message = (
+            f"Refusing to register '{dataset_path.as_posix()}': it has no embedded "
+            "images (or could not be read as a SLEAP package). Save it with "
+            "`labels.save(path, with_images=True)`, or pass "
+            "`require_embedded_images=False` to register anyway."
+        )
+        if require_embedded_images:
+            raise ValueError(message)
+        logging.warning(message)
+
     # Initialize the W&B run
     run = wandb.init(
         project=PROJECT_NAME,
@@ -220,7 +240,6 @@ def make_dataset_artifact(
     )
 
     try:
-        dataset_path = Path(dataset_path)
         artifact = wandb.Artifact(
             name=artifact_name,
             type="dataset",
@@ -232,6 +251,8 @@ def make_dataset_artifact(
         if tags:
             for tag in tags:
                 artifact.metadata[tag] = True
+        if metadata:
+            artifact.metadata.update(metadata)
 
         # Add the dataset file to the artifact
         artifact.add_file(local_path=dataset_path.as_posix(), overwrite=False)
