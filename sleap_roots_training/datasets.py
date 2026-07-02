@@ -75,6 +75,102 @@ def has_embedded_images(path: str) -> bool:
     return True
 
 
+def _referenced_paths(backend) -> List[str]:
+    """Return the external file path(s) a video backend references, if any."""
+    filenames = getattr(backend, "filenames", None)
+    if filenames:
+        return [str(f) for f in filenames]
+    filename = getattr(backend, "filename", None)
+    return [str(filename)] if filename else []
+
+
+def inspect_package(
+    path: str, search_paths: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """Inspect a SLEAP package's embedding status and recoverability.
+
+    Args:
+        path: Path to a ``.slp``/``.pkg.slp`` file.
+        search_paths: Optional directories forwarded to ``sleap.load_file`` to relocate
+            missing referenced videos by basename before checking their existence.
+
+    Returns:
+        A dict describing embedding status, per-video detail, and how (if at all) a
+        broken package could be repaired from its own referenced videos:
+        ``recoverable_via`` is ``"already_ok"`` (fully embedded), ``"referenced_videos"``
+        (re-embeddable from reachable source files), or ``"none"``.
+    """
+    _sleap = _get_sleap()
+
+    result: Dict[str, Any] = {
+        "embedded": False,
+        "loadable": False,
+        "error": None,
+        "n_user_frames": 0,
+        "n_videos": 0,
+        "n_videos_missing_pixels": 0,
+        "recoverable_via": "none",
+        "referenced_paths": [],
+        "videos": [],
+    }
+
+    try:
+        if search_paths:
+            labels = _sleap.load_file(path, search_paths=search_paths)
+        else:
+            labels = _sleap.load_file(path)
+    except Exception as e:
+        result["error"] = f"{type(e).__name__}: {e}"
+        return result
+
+    result["loadable"] = True
+    videos_with_user_frames = {
+        id(lf.video) for lf in labels.labeled_frames if lf.has_user_instances
+    }
+    result["n_user_frames"] = sum(
+        1 for lf in labels.labeled_frames if lf.has_user_instances
+    )
+    result["n_videos"] = len(labels.videos)
+
+    missing_referenced: List[str] = []
+    all_missing_reachable = True
+    n_missing = 0
+
+    for video in labels.videos:
+        backend = video.backend
+        has_user = id(video) in videos_with_user_frames
+        embedded = _video_has_embedded(backend)
+        refs = _referenced_paths(backend)
+        refs_exist = all(os.path.exists(p) for p in refs) if refs else False
+        result["videos"].append(
+            {
+                "backend_type": type(backend).__name__,
+                "embedded": embedded,
+                "has_user_frames": has_user,
+                "referenced_paths": refs,
+                "referenced_exists": refs_exist,
+            }
+        )
+        if has_user and not embedded:
+            n_missing += 1
+            missing_referenced.extend(refs)
+            if not refs_exist:
+                all_missing_reachable = False
+
+    result["n_videos_missing_pixels"] = n_missing
+    result["referenced_paths"] = missing_referenced
+    result["embedded"] = result["n_user_frames"] > 0 and n_missing == 0
+
+    if result["embedded"]:
+        result["recoverable_via"] = "already_ok"
+    elif n_missing > 0 and all_missing_reachable:
+        result["recoverable_via"] = "referenced_videos"
+    else:
+        result["recoverable_via"] = "none"
+
+    return result
+
+
 def make_dataset_artifact(
     artifact_name: str,
     dataset_path: str,

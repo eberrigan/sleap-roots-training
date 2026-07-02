@@ -381,3 +381,41 @@ class TestHasEmbeddedImages:
         fake_sleap = SimpleNamespace(load_file=boom)
         with patch("sleap_roots_training.datasets.sleap", fake_sleap):
             assert has_embedded_images("whatever.slp") is False
+
+
+class TestInspectPackage:
+    """Tests for inspect_package."""
+
+    def test_embedded_package_report(self, embedded_package):
+        from sleap_roots_training.datasets import inspect_package
+
+        info = inspect_package(embedded_package)
+        assert info["loadable"] is True
+        assert info["embedded"] is True
+        assert info["n_user_frames"] == 2
+        assert info["n_videos_missing_pixels"] == 0
+        assert info["recoverable_via"] == "already_ok"
+
+    def test_nonembedded_recoverable_via_referenced_videos(self, nonembedded_package):
+        from sleap_roots_training.datasets import inspect_package
+
+        info = inspect_package(nonembedded_package)
+        assert info["embedded"] is False
+        assert info["n_videos_missing_pixels"] == 1
+        # referenced PNGs still exist next to the fixture -> recoverable by re-embedding
+        assert info["recoverable_via"] == "referenced_videos"
+        assert len(info["referenced_paths"]) >= 1
+
+    def test_unloadable_file_report(self):
+        from sleap_roots_training.datasets import inspect_package
+
+        def boom(*a, **k):
+            raise ValueError("bad")
+
+        fake_sleap = SimpleNamespace(load_file=boom)
+        with patch("sleap_roots_training.datasets.sleap", fake_sleap):
+            info = inspect_package("whatever.slp")
+        assert info["loadable"] is False
+        assert info["embedded"] is False
+        assert info["recoverable_via"] == "none"
+        assert info["error"]
