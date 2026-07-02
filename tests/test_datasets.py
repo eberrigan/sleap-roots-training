@@ -592,3 +592,111 @@ class TestRecoverabilityHelpers:
         slp.write_text("x")
         assert _find_slp(str(tmp_path)) == str(slp)
         assert _find_slp(str(tmp_path / "empty")) is None
+
+
+class TestAuditRegistry:
+    """Tests for audit_registry orchestration (all wandb/sleap calls mocked)."""
+
+    def _fake_artifact(self, version, aliases, metadata, size):
+        art = MagicMock()
+        art.version = version
+        art.aliases = aliases
+        art.metadata = metadata
+        art.size = size
+        art.download.return_value = f"/dl/{version}"
+        return art
+
+    @patch("sleap_roots_training.datasets.os.path.exists", return_value=True)
+    @patch("sleap_roots_training.datasets.has_embedded_images", return_value=True)
+    @patch("sleap_roots_training.datasets._find_slp", return_value="/dl/v0/labels.slp")
+    @patch("sleap_roots_training.datasets.inspect_package")
+    @patch("sleap_roots_training.datasets.wandb.Api")
+    @patch("sleap_roots_training.datasets.CONFIG")
+    def test_audit_builds_expected_row(
+        self,
+        mock_config,
+        mock_api_cls,
+        mock_inspect,
+        mock_find_slp,
+        mock_has_embed,
+        mock_exists,
+    ):
+        from sleap_roots_training.datasets import audit_registry
+
+        mock_config.__getitem__.side_effect = lambda key: {
+            "entity_name": "ent",
+            "registry": "sleap-roots-labels",
+        }[key]
+
+        # One collection, one latest version that is NOT embedded but data_path is.
+        art = self._fake_artifact(
+            "v0", ["latest"], {"data_path": "Z:/src/labels.pkg.slp"}, 5_000_000
+        )
+        coll = MagicMock()
+        coll.name = "soybean_primary_6nodes_v004_labels"
+        coll.artifacts.return_value = [art]
+
+        api = MagicMock()
+        api.artifact_collections.return_value = [coll]
+        mock_api_cls.return_value = api
+
+        mock_inspect.return_value = {
+            "embedded": False,
+            "n_user_frames": 10,
+            "n_videos": 3,
+            "n_videos_missing_pixels": 1,
+            "recoverable_via": "none",
+            "error": None,
+        }
+
+        df = audit_registry()
+
+        api.artifact_collections.assert_called_once_with(
+            "ent-org/wandb-registry-sleap-roots-labels", "dataset"
+        )
+        assert len(df) == 1
+        row = df.iloc[0]
+        assert row["collection"] == "soybean_primary_6nodes_v004_labels"
+        assert row["version"] == "v0"
+        assert row["is_latest"] is True
+        assert row["embedded"] is False
+        # data_path exists + has_embedded_images True -> tier already_embedded
+        assert row["data_path_embedded"] is True
+        assert row["recoverable_via"] == "already_embedded"
+        assert set(
+            [
+                "collection",
+                "version",
+                "is_latest",
+                "size_mb",
+                "embedded",
+                "n_user_frames",
+                "n_videos",
+                "n_videos_missing_pixels",
+                "data_path",
+                "data_path_exists",
+                "data_path_embedded",
+                "referenced_recoverable",
+                "recoverable_via",
+                "notes",
+            ]
+        ).issubset(df.columns)
+
+    @patch("sleap_roots_training.datasets.wandb.Api")
+    @patch("sleap_roots_training.datasets.CONFIG")
+    def test_audit_filters_by_collection(self, mock_config, mock_api_cls):
+        from sleap_roots_training.datasets import audit_registry
+
+        mock_config.__getitem__.side_effect = lambda key: {
+            "entity_name": "ent",
+            "registry": "sleap-roots-labels",
+        }[key]
+        coll = MagicMock()
+        coll.name = "other_collection"
+        coll.artifacts.return_value = []
+        api = MagicMock()
+        api.artifact_collections.return_value = [coll]
+        mock_api_cls.return_value = api
+
+        df = audit_registry(collections=["not_present"])
+        assert len(df) == 0

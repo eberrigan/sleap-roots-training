@@ -216,6 +216,134 @@ def _find_slp(directory: str) -> Optional[str]:
     return matches[0] if matches else None
 
 
+def _audit_one_artifact(
+    collection_name: str,
+    artifact,
+    download_root: Optional[str],
+    search_paths: Optional[List[str]],
+) -> Dict[str, Any]:
+    """Download + inspect one registry artifact version; return one report row."""
+    md = getattr(artifact, "metadata", None) or {}
+    data_path = md.get("data_path")
+    aliases = getattr(artifact, "aliases", None) or []
+
+    row: Dict[str, Any] = {
+        "collection": collection_name,
+        "version": getattr(artifact, "version", getattr(artifact, "name", "?")),
+        "is_latest": "latest" in aliases,
+        "size_mb": round((getattr(artifact, "size", 0) or 0) / 1_000_000, 1),
+        "data_path": data_path,
+    }
+
+    art_dir = (
+        artifact.download(root=download_root) if download_root else artifact.download()
+    )
+    slp = _find_slp(art_dir)
+    if slp is None:
+        row.update(
+            {
+                "embedded": False,
+                "n_user_frames": 0,
+                "n_videos": 0,
+                "n_videos_missing_pixels": 0,
+                "data_path_exists": False,
+                "data_path_embedded": False,
+                "referenced_recoverable": False,
+                "recoverable_via": "none",
+                "notes": "no .slp file found in artifact",
+            }
+        )
+        return row
+
+    info = inspect_package(slp, search_paths=search_paths)
+    data_path_exists = bool(data_path) and os.path.exists(data_path)
+    data_path_embedded = data_path_exists and has_embedded_images(data_path)
+
+    row.update(
+        {
+            "embedded": info["embedded"],
+            "n_user_frames": info["n_user_frames"],
+            "n_videos": info["n_videos"],
+            "n_videos_missing_pixels": info["n_videos_missing_pixels"],
+            "data_path_exists": data_path_exists,
+            "data_path_embedded": data_path_embedded,
+            "referenced_recoverable": info["recoverable_via"] == "referenced_videos",
+            "recoverable_via": _classify_recoverability(info, data_path_embedded),
+            "notes": info.get("error") or "",
+        }
+    )
+    return row
+
+
+def audit_registry(
+    registry: Optional[str] = None,
+    entity: Optional[str] = None,
+    collections: Optional[List[str]] = None,
+    all_versions: bool = False,
+    download_root: Optional[str] = None,
+    search_paths: Optional[List[str]] = None,
+) -> "Any":
+    """Audit the label-package registry for missing embedded images.
+
+    Enumerates dataset collections under ``<entity>-org/wandb-registry-<registry>``,
+    downloads each collection's ``latest`` version (or all versions), and reports
+    embedding status + recoverability. Returns a ``pandas.DataFrame``.
+
+    Args:
+        registry: Registry name; defaults to ``CONFIG['registry']`` or
+            ``"sleap-roots-labels"``.
+        entity: W&B entity; defaults to ``CONFIG['entity_name']``.
+        collections: Optional subset of collection names to audit.
+        all_versions: If True, audit every version, else only ``latest``.
+        download_root: Optional root dir for artifact downloads.
+        search_paths: Optional dirs to relocate missing referenced videos by basename.
+
+    Returns:
+        A DataFrame with one row per audited artifact version.
+    """
+    import pandas as pd
+
+    entity = entity or CONFIG["entity_name"]
+    registry = registry or CONFIG["registry"] or "sleap-roots-labels"
+    project_path = f"{entity}-org/wandb-registry-{registry}"
+
+    api = wandb.Api()
+    rows: List[Dict[str, Any]] = []
+    for coll in api.artifact_collections(project_path, "dataset"):
+        if collections and coll.name not in collections:
+            continue
+        versions = list(coll.artifacts())
+        if all_versions:
+            targets = versions
+        else:
+            latest = _latest_version(versions)
+            targets = [latest] if latest is not None else []
+        for art in targets:
+            rows.append(
+                _audit_one_artifact(coll.name, art, download_root, search_paths)
+            )
+
+    logging.info(
+        f"Audited {len(rows)} artifact version(s) across registry '{registry}'."
+    )
+    df = pd.DataFrame(rows)
+    # pandas stores a homogeneous-bool column as a numpy bool64 array, so scalar
+    # access (df.iloc[i]["col"]) yields numpy.bool_ rather than Python's `True`/
+    # `False` singletons. Cast back to object dtype so callers can rely on
+    # identity checks (`row["embedded"] is True`) against the native bools this
+    # function actually produced.
+    for col in (
+        "is_latest",
+        "embedded",
+        "data_path_exists",
+        "data_path_embedded",
+        "referenced_recoverable",
+    ):
+        if col in df.columns:
+            df[col] = df[col].astype(object)
+    return df
+
+
 def make_dataset_artifact(
     artifact_name: str,
     dataset_path: str,
