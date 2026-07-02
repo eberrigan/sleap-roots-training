@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
 from sleap_roots_training.datasets import make_dataset_artifact
-from tests.fixtures import embedded_package, nonembedded_package
+from tests.fixtures import embedded_package, nonembedded_package, _build_tiny_labels
 
 
 class TestMakeDatasetArtifact:
@@ -419,3 +419,24 @@ class TestInspectPackage:
         assert info["embedded"] is False
         assert info["recoverable_via"] == "none"
         assert info["error"]
+
+    def test_search_paths_recovers_moved_image_sequence(self, tmp_path):
+        pytest.importorskip("sleap")
+        pytest.importorskip("imageio")
+        from sleap_roots_training.datasets import inspect_package
+
+        img_dir = tmp_path / "imgs"
+        labels, _ = _build_tiny_labels(str(img_dir))
+        out = str(tmp_path / "nonembedded.slp")
+        labels.save(out, with_images=False)
+
+        moved = tmp_path / "imgs_moved"
+        img_dir.rename(moved)
+
+        # Referenced images gone from their original location -> unrecoverable...
+        assert inspect_package(out)["recoverable_via"] == "none"
+        # ...but findable via search_paths (basename match) -> recoverable by re-embed.
+        assert (
+            inspect_package(out, search_paths=[str(moved)])["recoverable_via"]
+            == "referenced_videos"
+        )

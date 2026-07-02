@@ -76,9 +76,22 @@ def has_embedded_images(path: str) -> bool:
 
 
 def _referenced_paths(backend) -> List[str]:
-    """Return the external file path(s) a video backend references, if any."""
+    """Return the external file path(s) a video backend references, if any.
+
+    SLEAP's ``search_paths`` relocation only rewrites a backend's singular
+    ``filename`` (the current image), not the plural ``filenames`` list. For
+    image-sequence backends we rebase each ``filenames`` entry onto the
+    (possibly relocated) directory of ``filename`` so existence checks reflect
+    ``search_paths``.
+    """
     filenames = getattr(backend, "filenames", None)
     if filenames:
+        current = getattr(backend, "filename", None)
+        if current:
+            reloc_dir = os.path.dirname(str(current))
+            return [
+                os.path.join(reloc_dir, os.path.basename(str(f))) for f in filenames
+            ]
         return [str(f) for f in filenames]
     filename = getattr(backend, "filename", None)
     return [str(filename)] if filename else []
