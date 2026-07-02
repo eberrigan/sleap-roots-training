@@ -327,3 +327,43 @@ class TestMakeDatasetArtifact:
                 mock_artifact.add_file.assert_called_once_with(
                     local_path=Path(dataset_path_str).as_posix(), overwrite=False
                 )
+
+
+from unittest.mock import patch
+from types import SimpleNamespace
+
+from tests.fixtures import embedded_package, nonembedded_package
+
+
+class TestHasEmbeddedImages:
+    """Tests for has_embedded_images detection."""
+
+    def test_embedded_package_returns_true(self, embedded_package):
+        from sleap_roots_training.datasets import has_embedded_images
+
+        assert has_embedded_images(embedded_package) is True
+
+    def test_nonembedded_package_returns_false(self, nonembedded_package):
+        from sleap_roots_training.datasets import has_embedded_images
+
+        assert has_embedded_images(nonembedded_package) is False
+
+    def test_zero_user_frames_returns_false(self):
+        from sleap_roots_training.datasets import has_embedded_images
+
+        fake_labels = SimpleNamespace(labeled_frames=[], videos=[])
+        fake_sleap = SimpleNamespace(load_file=lambda *a, **k: fake_labels)
+        # Patch the module-level sleap sentinel so _get_sleap() returns our fake and no
+        # real sleap import is needed (this test runs even without sleap installed).
+        with patch("sleap_roots_training.datasets.sleap", fake_sleap):
+            assert has_embedded_images("whatever.slp") is False
+
+    def test_unloadable_file_returns_false(self):
+        from sleap_roots_training.datasets import has_embedded_images
+
+        def boom(*a, **k):
+            raise ValueError("bad file")
+
+        fake_sleap = SimpleNamespace(load_file=boom)
+        with patch("sleap_roots_training.datasets.sleap", fake_sleap):
+            assert has_embedded_images("whatever.slp") is False

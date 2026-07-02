@@ -1,13 +1,78 @@
+import os
 import wandb
 import logging
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from sleap_roots_training.config import CONFIG
 
+# sleap is heavy and optional at import time (the cross-platform test-imports job has no
+# sleap). Keep it out of module import; _get_sleap() imports it lazily on first use and
+# caches it here. Tests patch `sleap_roots_training.datasets.sleap` directly.
+sleap = None
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
+
+
+def _get_sleap():
+    """Import and cache the ``sleap`` module lazily (kept out of module import time)."""
+    global sleap
+    if sleap is None:
+        import sleap as _sleap
+
+        sleap = _sleap
+    return sleap
+
+
+def _video_has_embedded(backend) -> bool:
+    """Return True iff a video backend is an HDF5Video carrying embedded images.
+
+    Never raises: any error accessing the backend (e.g. an unreadable source video)
+    is treated as "not embedded".
+    """
+    try:
+        return type(backend).__name__ == "HDF5Video" and bool(
+            backend.has_embedded_images
+        )
+    except Exception:
+        return False
+
+
+def has_embedded_images(path: str) -> bool:
+    """Return True iff the SLEAP package at ``path`` is trainable on its own.
+
+    A package is trainable when it has at least one user-labeled frame and every video
+    that carries user-labeled frames has embedded image data. Videos without user labels
+    are ignored (packages may reference thousands of unused videos). Returns False if the
+    file cannot be read as a SLEAP package.
+
+    Args:
+        path: Path to a ``.slp``/``.pkg.slp`` file.
+
+    Returns:
+        True if every user-labeled-frame video has embedded images, else False.
+    """
+    _sleap = _get_sleap()
+    try:
+        labels = _sleap.load_file(path)
+    except Exception as e:
+        logging.debug(f"has_embedded_images: could not load {path}: {e}")
+        return False
+
+    videos_with_user_frames = {
+        id(lf.video) for lf in labels.labeled_frames if lf.has_user_instances
+    }
+    if not videos_with_user_frames:
+        return False
+
+    for video in labels.videos:
+        if id(video) not in videos_with_user_frames:
+            continue
+        if not _video_has_embedded(video.backend):
+            return False
+    return True
 
 
 def make_dataset_artifact(

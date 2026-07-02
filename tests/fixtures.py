@@ -11,6 +11,7 @@ import json
 import pandas as pd
 from pathlib import Path
 import shutil
+import numpy as np
 
 from sleap_roots_training.train import load_training_data
 
@@ -268,3 +269,61 @@ def environment_config():
         "tags": ["test", "integration"],
         "model_tags": ["test-model", "integration"],
     }
+
+
+def _build_tiny_labels(img_dir):
+    """Build a 3-frame, 2-node SLEAP Labels backed by real PNG files.
+
+    Uses image files (not numpy) so the embedded package's source video is a lazy
+    SingleImageVideo — a numpy source makes HDF5Video.has_embedded_images raise on load.
+    """
+    import os
+    import imageio.v2 as imageio
+    import sleap
+
+    os.makedirs(img_dir, exist_ok=True)
+    paths = []
+    for i in range(3):
+        p = os.path.join(img_dir, f"frame_{i}.png")
+        imageio.imwrite(p, np.random.randint(0, 255, size=(16, 16), dtype=np.uint8))
+        paths.append(p)
+
+    video = sleap.Video.from_image_filenames(paths)
+    skeleton = sleap.Skeleton()
+    skeleton.add_node("a")
+    skeleton.add_node("b")
+    frames = [
+        sleap.LabeledFrame(
+            video=video,
+            frame_idx=i,
+            instances=[
+                sleap.Instance.from_pointsarray(
+                    np.array([[1 + i, 1 + i], [2 + i, 2 + i]]), skeleton=skeleton
+                )
+            ],
+        )
+        for i in range(2)
+    ]
+    return sleap.Labels(frames), paths
+
+
+@pytest.fixture
+def embedded_package(tmp_path):
+    """Path to a tiny .pkg.slp saved WITH embedded images."""
+    pytest.importorskip("sleap")
+    pytest.importorskip("imageio")
+    labels, _ = _build_tiny_labels(str(tmp_path / "imgs"))
+    out = str(tmp_path / "embedded.pkg.slp")
+    labels.save(out, with_images=True)
+    return out
+
+
+@pytest.fixture
+def nonembedded_package(tmp_path):
+    """Path to a tiny .slp saved WITHOUT embedded images (references PNGs that exist)."""
+    pytest.importorskip("sleap")
+    pytest.importorskip("imageio")
+    labels, img_paths = _build_tiny_labels(str(tmp_path / "imgs"))
+    out = str(tmp_path / "nonembedded.slp")
+    labels.save(out, with_images=False)
+    return out
