@@ -42,4 +42,11 @@ conda run -n sleap_v1.4.1 --no-capture-output python repair.py \
 conda run -n sleap_v1.4.1 --no-capture-output python repair.py --collection all --apply
 ```
 
+**Note:** For a `referenced_videos` (tier-2) collection, even a dry-run downloads the
+artifact and writes a re-embedded copy to a local temp dir (or `--out-dir`) to prove the
+repair is achievable — it still writes nothing to the W&B registry; only `--apply`
+registers a new version. Repair assumes the target collection is broken: run `audit.py`
+first, or use `--collection all`, which repairs only collections the audit reports as
+not embedded.
+
 After applying, re-run `audit.py` to confirm every collection reports `embedded == True`.

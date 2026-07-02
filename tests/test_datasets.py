@@ -878,3 +878,27 @@ class TestRepairArtifact:
         assert result["status"] == "unrecoverable"
         assert result["recoverable_via"] == "none"
         mock_make.assert_not_called()
+
+    def test_tier2_reembed_pixel_path_end_to_end(self, tmp_path):
+        """The real SLEAP mechanic tier-2 repair_artifact relies on: relocate the
+        referenced image sequence via search_paths, then save(with_images=True) to
+        embed the pixels. (repair_artifact's W&B orchestration is covered by mocks.)"""
+        pytest.importorskip("sleap")
+        pytest.importorskip("imageio")
+        import sleap
+        from sleap_roots_training.datasets import has_embedded_images
+        from tests.fixtures import _build_tiny_labels
+
+        img_dir = tmp_path / "imgs"
+        labels, _ = _build_tiny_labels(str(img_dir))
+        src = str(tmp_path / "nonembedded.slp")
+        labels.save(src, with_images=False)
+        assert has_embedded_images(src) is False
+
+        moved = tmp_path / "imgs_moved"
+        img_dir.rename(moved)
+
+        reloaded = sleap.load_file(src, search_paths=[str(moved)])
+        out = str(tmp_path / "reembedded.pkg.slp")
+        reloaded.save(out, with_images=True)
+        assert has_embedded_images(out) is True

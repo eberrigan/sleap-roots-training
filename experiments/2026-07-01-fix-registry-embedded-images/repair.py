@@ -37,6 +37,10 @@ def main():
             download_root=args.download_root,
             search_paths=args.search_paths,
         )
+        if len(df) == 0:
+            print("No collections matched — nothing to repair.")
+            return
+
         targets = list(df.loc[~df["embedded"], "collection"])
         print(f"Broken collections to repair: {targets}")
     else:

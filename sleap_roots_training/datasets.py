@@ -40,6 +40,11 @@ def _video_has_embedded(backend) -> bool:
         return False
 
 
+def _user_frame_video_ids(labels):
+    """Return the id()s of videos that carry at least one user-labeled frame."""
+    return {id(lf.video) for lf in labels.labeled_frames if lf.has_user_instances}
+
+
 def has_embedded_images(path: str) -> bool:
     """Return True iff the SLEAP package at ``path`` is trainable on its own.
 
@@ -61,9 +66,7 @@ def has_embedded_images(path: str) -> bool:
         logging.debug(f"has_embedded_images: could not load {path}: {e}")
         return False
 
-    videos_with_user_frames = {
-        id(lf.video) for lf in labels.labeled_frames if lf.has_user_instances
-    }
+    videos_with_user_frames = _user_frame_video_ids(labels)
     if not videos_with_user_frames:
         return False
 
@@ -137,9 +140,7 @@ def inspect_package(
         return result
 
     result["loadable"] = True
-    videos_with_user_frames = {
-        id(lf.video) for lf in labels.labeled_frames if lf.has_user_instances
-    }
+    videos_with_user_frames = _user_frame_video_ids(labels)
     result["n_user_frames"] = sum(
         1 for lf in labels.labeled_frames if lf.has_user_instances
     )
@@ -450,6 +451,7 @@ def repair_artifact(
     from sleap_roots_training import config as _config
 
     _config.update_config(
+        entity_name=entity,
         registry=registry,
         collection_name=collection,
         experiment_name=f"{collection}_embedded_images_repair",
