@@ -326,22 +326,7 @@ def audit_registry(
     logging.info(
         f"Audited {len(rows)} artifact version(s) across registry '{registry}'."
     )
-    df = pd.DataFrame(rows)
-    # pandas stores a homogeneous-bool column as a numpy bool64 array, so scalar
-    # access (df.iloc[i]["col"]) yields numpy.bool_ rather than Python's `True`/
-    # `False` singletons. Cast back to object dtype so callers can rely on
-    # identity checks (`row["embedded"] is True`) against the native bools this
-    # function actually produced.
-    for col in (
-        "is_latest",
-        "embedded",
-        "data_path_exists",
-        "data_path_embedded",
-        "referenced_recoverable",
-    ):
-        if col in df.columns:
-            df[col] = df[col].astype(object)
-    return df
+    return pd.DataFrame(rows)
 
 
 def make_dataset_artifact(

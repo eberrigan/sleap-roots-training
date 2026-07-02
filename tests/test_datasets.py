@@ -658,10 +658,13 @@ class TestAuditRegistry:
         row = df.iloc[0]
         assert row["collection"] == "soybean_primary_6nodes_v004_labels"
         assert row["version"] == "v0"
-        assert row["is_latest"] is True
-        assert row["embedded"] is False
+        # Truthiness (not `is True`): pandas stores bool columns as numpy bool_,
+        # so scalar cells are numpy.bool_, not Python singletons. Native bool
+        # dtype is kept so Task 7's ~df["embedded"] masking works.
+        assert row["is_latest"]
+        assert not row["embedded"]
         # data_path exists + has_embedded_images True -> tier already_embedded
-        assert row["data_path_embedded"] is True
+        assert row["data_path_embedded"]
         assert row["recoverable_via"] == "already_embedded"
         assert set(
             [
