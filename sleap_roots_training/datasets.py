@@ -329,6 +329,145 @@ def audit_registry(
     return pd.DataFrame(rows)
 
 
+def repair_artifact(
+    collection: str,
+    *,
+    registry: Optional[str] = None,
+    entity: Optional[str] = None,
+    dry_run: bool = True,
+    search_paths: Optional[List[str]] = None,
+    out_dir: Optional[str] = None,
+    download_root: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Repair one registry collection's latest version so it has embedded images.
+
+    Tier 1 (``already_embedded``): if the artifact's ``metadata['data_path']`` file on
+    disk is itself embedded, re-register that file — no re-embedding. Tier 2
+    (``referenced_videos``): download the artifact, relocate missing videos via
+    ``search_paths``, and ``labels.save(..., with_images=True)``. A post-condition
+    asserts the fixed file is embedded before re-registration, which goes through
+    ``make_dataset_artifact`` (so the guardrail double-checks) as a new version in the
+    same collection.
+
+    Args:
+        collection: Collection name to repair.
+        registry: Registry name; defaults to ``CONFIG['registry']`` or
+            ``"sleap-roots-labels"``.
+        entity: W&B entity; defaults to ``CONFIG['entity_name']``.
+        dry_run: If True (default), plan only — no downloads-to-registry writes.
+        search_paths: Dirs to relocate missing referenced videos by basename.
+        out_dir: Where to write the re-embedded package (tier 2). Defaults to a temp dir.
+        download_root: Optional root dir for artifact downloads.
+
+    Returns:
+        A dict: ``{collection, status, tier, fixed_path, recoverable_via}``. ``status``
+        is one of ``already_ok``, ``unrecoverable``, ``dry_run``, ``applied``.
+
+    Raises:
+        RuntimeError: If tier-2 re-embedding does not produce an embedded package.
+    """
+    import tempfile
+
+    _sleap = _get_sleap()
+    entity = entity or CONFIG["entity_name"]
+    registry = registry or CONFIG["registry"] or "sleap-roots-labels"
+    project_path = f"{entity}-org/wandb-registry-{registry}"
+
+    api = wandb.Api()
+    target_coll = None
+    for coll in api.artifact_collections(project_path, "dataset"):
+        if coll.name == collection:
+            target_coll = coll
+            break
+    if target_coll is None:
+        raise ValueError(
+            f"Collection '{collection}' not found in registry '{registry}'."
+        )
+
+    artifact = _latest_version(list(target_coll.artifacts()))
+    if artifact is None:
+        raise ValueError(f"Collection '{collection}' has no versions.")
+
+    md = getattr(artifact, "metadata", None) or {}
+    data_path = md.get("data_path")
+    old_version = getattr(artifact, "version", "?")
+
+    result: Dict[str, Any] = {
+        "collection": collection,
+        "status": None,
+        "tier": None,
+        "fixed_path": None,
+        "recoverable_via": None,
+    }
+
+    # Tier 1: the source file on disk is already embedded -> re-register it as-is.
+    if data_path and os.path.exists(data_path) and has_embedded_images(data_path):
+        tier = "already_embedded"
+        fixed_path = data_path
+    else:
+        art_dir = (
+            artifact.download(root=download_root)
+            if download_root
+            else artifact.download()
+        )
+        slp = _find_slp(art_dir)
+        info = inspect_package(slp, search_paths=search_paths)
+        result["recoverable_via"] = info.get("recoverable_via")
+
+        if info.get("embedded"):
+            result["status"] = "already_ok"
+            result["tier"] = "already_ok"
+            result["fixed_path"] = slp
+            return result
+        if info.get("recoverable_via") != "referenced_videos":
+            result["status"] = "unrecoverable"
+            return result
+
+        tier = "referenced_videos"
+        out_dir = out_dir or tempfile.mkdtemp(prefix="reembed_")
+        os.makedirs(out_dir, exist_ok=True)
+        fixed_path = os.path.join(out_dir, f"{collection}.pkg.slp")
+        if search_paths:
+            labels = _sleap.load_file(slp, search_paths=search_paths)
+        else:
+            labels = _sleap.load_file(slp)
+        labels.save(fixed_path, with_images=True)
+
+    # Post-condition: the fixed file must actually be embedded.
+    if not has_embedded_images(fixed_path):
+        raise RuntimeError(
+            f"Repair failed: '{fixed_path}' still lacks embedded images after re-embedding."
+        )
+
+    result["tier"] = tier
+    result["fixed_path"] = fixed_path
+    result["recoverable_via"] = tier
+
+    if dry_run:
+        result["status"] = "dry_run"
+        return result
+
+    from sleap_roots_training import config as _config
+
+    _config.update_config(
+        registry=registry,
+        collection_name=collection,
+        experiment_name=f"{collection}_embedded_images_repair",
+        job_type="build_dataset",
+    )
+    make_dataset_artifact(
+        artifact_name=collection,
+        dataset_path=fixed_path,
+        link_to_registry=True,
+        description=f"Re-embedded ({tier}) repair of '{collection}' to restore trainable images.",
+        tags=["embedded-images-repair"],
+        require_embedded_images=True,
+        metadata={"images_embedded": True, "repaired_from": old_version},
+    )
+    result["status"] = "applied"
+    return result
+
+
 def make_dataset_artifact(
     artifact_name: str,
     dataset_path: str,

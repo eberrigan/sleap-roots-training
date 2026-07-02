@@ -703,3 +703,178 @@ class TestAuditRegistry:
 
         df = audit_registry(collections=["not_present"])
         assert len(df) == 0
+
+
+class TestRepairArtifact:
+    """Tests for repair_artifact (all wandb/sleap/make_dataset_artifact mocked)."""
+
+    def _api_with_latest(self, mock_api_cls, metadata):
+        art = MagicMock()
+        art.version = "v0"
+        art.aliases = ["latest"]
+        art.metadata = metadata
+        art.download.return_value = "/dl/v0"
+        coll = MagicMock()
+        coll.name = "col"
+        coll.artifacts.return_value = [art]
+        api = MagicMock()
+        api.artifact_collections.return_value = [coll]
+        mock_api_cls.return_value = api
+        return api, art
+
+    @patch("sleap_roots_training.datasets.make_dataset_artifact")
+    @patch("sleap_roots_training.datasets.has_embedded_images", return_value=True)
+    @patch("sleap_roots_training.datasets.os.path.exists", return_value=True)
+    @patch("sleap_roots_training.datasets.wandb.Api")
+    @patch("sleap_roots_training.datasets.CONFIG")
+    def test_tier1_dry_run_no_writes(
+        self, mock_config, mock_api_cls, mock_exists, mock_embed, mock_make
+    ):
+        from sleap_roots_training.datasets import repair_artifact
+
+        mock_config.__getitem__.side_effect = lambda key: {
+            "entity_name": "ent",
+            "registry": "sleap-roots-labels",
+        }[key]
+        self._api_with_latest(mock_api_cls, {"data_path": "Z:/src/labels.pkg.slp"})
+
+        result = repair_artifact("col", dry_run=True)
+
+        assert result["tier"] == "already_embedded"
+        assert result["fixed_path"] == "Z:/src/labels.pkg.slp"
+        assert result["status"] == "dry_run"
+        mock_make.assert_not_called()
+
+    @patch("sleap_roots_training.config.update_config")
+    @patch("sleap_roots_training.datasets.os.makedirs")
+    @patch("sleap_roots_training.datasets.make_dataset_artifact")
+    @patch("sleap_roots_training.datasets.inspect_package")
+    @patch("sleap_roots_training.datasets.sleap")
+    @patch("sleap_roots_training.datasets.has_embedded_images")
+    @patch("sleap_roots_training.datasets.os.path.exists", return_value=False)
+    @patch("sleap_roots_training.datasets.wandb.Api")
+    @patch("sleap_roots_training.datasets.CONFIG")
+    def test_tier2_apply_reembeds_and_registers(
+        self,
+        mock_config,
+        mock_api_cls,
+        mock_exists,
+        mock_embed,
+        mock_sleap,
+        mock_inspect,
+        mock_make,
+        mock_makedirs,
+        mock_update_config,
+    ):
+        from sleap_roots_training.datasets import repair_artifact
+
+        mock_config.__getitem__.side_effect = lambda key: {
+            "entity_name": "ent",
+            "registry": "sleap-roots-labels",
+        }[key]
+        self._api_with_latest(mock_api_cls, {"data_path": "Z:/gone.pkg.slp"})
+
+        # tier-1 check: data_path not embedded (os.path.exists False short-circuits).
+        # tier-2: artifact slp is not embedded but recoverable; after save it IS.
+        mock_inspect.return_value = {
+            "embedded": False,
+            "recoverable_via": "referenced_videos",
+        }
+        # has_embedded_images: [tier1 data_path]=skipped(exists False), [post-condition]=True
+        mock_embed.return_value = True
+        mock_labels = MagicMock()
+        mock_sleap.load_file.return_value = mock_labels
+
+        with patch(
+            "sleap_roots_training.datasets._find_slp", return_value="/dl/v0/labels.slp"
+        ):
+            result = repair_artifact(
+                "col", dry_run=False, search_paths=["Z:/videos"], out_dir="/out"
+            )
+
+        mock_sleap.load_file.assert_called_once_with(
+            "/dl/v0/labels.slp", search_paths=["Z:/videos"]
+        )
+        mock_labels.save.assert_called_once()
+        # NOTE: `call_args.kwargs`/`.args` attributes require Python 3.8+; this repo's
+        # sleap_v1.4.1 env runs Python 3.7, where `_Call.__getattr__` silently returns a
+        # bogus nested `_Call` instead of raising, masking a real failure. Index into the
+        # (args, kwargs) tuple instead - identical semantics, works on 3.7 and 3.8+.
+        assert mock_labels.save.call_args[1].get("with_images") is True
+        mock_make.assert_called_once()
+        assert mock_make.call_args[1]["require_embedded_images"] is True
+        assert mock_make.call_args[1]["metadata"]["images_embedded"] is True
+        assert result["status"] == "applied"
+        assert result["tier"] == "referenced_videos"
+
+    @patch("sleap_roots_training.datasets.os.makedirs")
+    @patch("sleap_roots_training.datasets.make_dataset_artifact")
+    @patch("sleap_roots_training.datasets.inspect_package")
+    @patch("sleap_roots_training.datasets.sleap")
+    @patch("sleap_roots_training.datasets.has_embedded_images")
+    @patch("sleap_roots_training.datasets.os.path.exists", return_value=False)
+    @patch("sleap_roots_training.datasets.wandb.Api")
+    @patch("sleap_roots_training.datasets.CONFIG")
+    def test_tier2_postcondition_failure_raises(
+        self,
+        mock_config,
+        mock_api_cls,
+        mock_exists,
+        mock_embed,
+        mock_sleap,
+        mock_inspect,
+        mock_make,
+        mock_makedirs,
+    ):
+        from sleap_roots_training.datasets import repair_artifact
+
+        mock_config.__getitem__.side_effect = lambda key: {
+            "entity_name": "ent",
+            "registry": "sleap-roots-labels",
+        }[key]
+        self._api_with_latest(mock_api_cls, {"data_path": "Z:/gone.pkg.slp"})
+        mock_inspect.return_value = {
+            "embedded": False,
+            "recoverable_via": "referenced_videos",
+        }
+        mock_embed.return_value = False  # re-embed silently failed
+        mock_sleap.load_file.return_value = MagicMock()
+
+        with patch(
+            "sleap_roots_training.datasets._find_slp", return_value="/dl/v0/labels.slp"
+        ):
+            with pytest.raises(RuntimeError, match="still lacks embedded images"):
+                repair_artifact("col", dry_run=False, out_dir="/out")
+        mock_make.assert_not_called()
+
+    @patch("sleap_roots_training.datasets.make_dataset_artifact")
+    @patch("sleap_roots_training.datasets.inspect_package")
+    @patch("sleap_roots_training.datasets.has_embedded_images", return_value=False)
+    @patch("sleap_roots_training.datasets.os.path.exists", return_value=False)
+    @patch("sleap_roots_training.datasets.wandb.Api")
+    @patch("sleap_roots_training.datasets.CONFIG")
+    def test_unrecoverable_returns_status(
+        self,
+        mock_config,
+        mock_api_cls,
+        mock_exists,
+        mock_embed,
+        mock_inspect,
+        mock_make,
+    ):
+        from sleap_roots_training.datasets import repair_artifact
+
+        mock_config.__getitem__.side_effect = lambda key: {
+            "entity_name": "ent",
+            "registry": "sleap-roots-labels",
+        }[key]
+        self._api_with_latest(mock_api_cls, {"data_path": "Z:/gone.pkg.slp"})
+        mock_inspect.return_value = {"embedded": False, "recoverable_via": "none"}
+
+        with patch(
+            "sleap_roots_training.datasets._find_slp", return_value="/dl/v0/labels.slp"
+        ):
+            result = repair_artifact("col", dry_run=False)
+        assert result["status"] == "unrecoverable"
+        assert result["recoverable_via"] == "none"
+        mock_make.assert_not_called()
