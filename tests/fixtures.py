@@ -323,7 +323,7 @@ def nonembedded_package(tmp_path):
     """Path to a tiny .slp saved WITHOUT embedded images (references PNGs that exist)."""
     pytest.importorskip("sleap")
     pytest.importorskip("imageio")
-    labels, img_paths = _build_tiny_labels(str(tmp_path / "imgs"))
+    labels, _ = _build_tiny_labels(str(tmp_path / "imgs"))
     out = str(tmp_path / "nonembedded.slp")
     labels.save(out, with_images=False)
     return out

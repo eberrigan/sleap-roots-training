@@ -1,9 +1,11 @@
 import pytest
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
 from sleap_roots_training.datasets import make_dataset_artifact
+from tests.fixtures import embedded_package, nonembedded_package
 
 
 class TestMakeDatasetArtifact:
@@ -329,12 +331,6 @@ class TestMakeDatasetArtifact:
                 )
 
 
-from unittest.mock import patch
-from types import SimpleNamespace
-
-from tests.fixtures import embedded_package, nonembedded_package
-
-
 class TestHasEmbeddedImages:
     """Tests for has_embedded_images detection."""
 
@@ -347,6 +343,24 @@ class TestHasEmbeddedImages:
         from sleap_roots_training.datasets import has_embedded_images
 
         assert has_embedded_images(nonembedded_package) is False
+
+    def test_mixed_videos_ignores_non_user_videos(self):
+        from sleap_roots_training.datasets import has_embedded_images
+
+        class HDF5Video:  # class NAME must match what _video_has_embedded checks
+            has_embedded_images = True
+
+        class OtherVideo:  # a non-embedded, non-HDF5 backend
+            pass
+
+        video_a = SimpleNamespace(backend=HDF5Video())  # embedded, has user frames
+        video_b = SimpleNamespace(backend=OtherVideo())  # NOT embedded, no user frames
+        lf = SimpleNamespace(video=video_a, has_user_instances=True)
+        fake_labels = SimpleNamespace(labeled_frames=[lf], videos=[video_a, video_b])
+        fake_sleap = SimpleNamespace(load_file=lambda *a, **k: fake_labels)
+        with patch("sleap_roots_training.datasets.sleap", fake_sleap):
+            # video_b lacks embedded images but has no user frames -> ignored -> True
+            assert has_embedded_images("whatever.slp") is True
 
     def test_zero_user_frames_returns_false(self):
         from sleap_roots_training.datasets import has_embedded_images
