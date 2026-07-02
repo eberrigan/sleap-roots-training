@@ -531,3 +531,64 @@ class TestEmbeddingGuardrail:
                 )
         assert mock_artifact.metadata["images_embedded"] is True
         assert mock_artifact.metadata["repaired_from"] == "v0"
+
+
+class TestRecoverabilityHelpers:
+    """Tests for _classify_recoverability, _latest_version, _find_slp."""
+
+    def test_classify_already_ok(self):
+        from sleap_roots_training.datasets import _classify_recoverability
+
+        assert (
+            _classify_recoverability(
+                {"embedded": True, "recoverable_via": "already_ok"}, False
+            )
+            == "already_ok"
+        )
+
+    def test_classify_already_embedded_beats_referenced(self):
+        from sleap_roots_training.datasets import _classify_recoverability
+
+        info = {"embedded": False, "recoverable_via": "referenced_videos"}
+        assert (
+            _classify_recoverability(info, data_path_embedded=True)
+            == "already_embedded"
+        )
+
+    def test_classify_referenced_videos(self):
+        from sleap_roots_training.datasets import _classify_recoverability
+
+        info = {"embedded": False, "recoverable_via": "referenced_videos"}
+        assert (
+            _classify_recoverability(info, data_path_embedded=False)
+            == "referenced_videos"
+        )
+
+    def test_classify_none(self):
+        from sleap_roots_training.datasets import _classify_recoverability
+
+        info = {"embedded": False, "recoverable_via": "none"}
+        assert _classify_recoverability(info, data_path_embedded=False) == "none"
+
+    def test_latest_version_prefers_latest_alias(self):
+        from sleap_roots_training.datasets import _latest_version
+
+        v0 = SimpleNamespace(aliases=[], version="v0")
+        v1 = SimpleNamespace(aliases=["latest"], version="v1")
+        assert _latest_version([v0, v1]) is v1
+
+    def test_latest_version_falls_back_to_first(self):
+        from sleap_roots_training.datasets import _latest_version
+
+        v0 = SimpleNamespace(aliases=[], version="v0")
+        assert _latest_version([v0]) is v0
+        assert _latest_version([]) is None
+
+    def test_find_slp(self, tmp_path):
+        from sleap_roots_training.datasets import _find_slp
+
+        (tmp_path / "notes.txt").write_text("x")
+        slp = tmp_path / "labels.pkg.slp"
+        slp.write_text("x")
+        assert _find_slp(str(tmp_path)) == str(slp)
+        assert _find_slp(str(tmp_path / "empty")) is None

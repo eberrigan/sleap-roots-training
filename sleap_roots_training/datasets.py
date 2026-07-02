@@ -184,6 +184,38 @@ def inspect_package(
     return result
 
 
+def _classify_recoverability(info: Dict[str, Any], data_path_embedded: bool) -> str:
+    """Combine per-file inspection with the registry ``data_path`` tier-1 check.
+
+    Returns one of ``already_ok`` (artifact already embedded), ``already_embedded``
+    (the metadata data_path file on disk is embedded), ``referenced_videos``
+    (re-embeddable from reachable source videos), or ``none``.
+    """
+    if info.get("embedded"):
+        return "already_ok"
+    if data_path_embedded:
+        return "already_embedded"
+    if info.get("recoverable_via") == "referenced_videos":
+        return "referenced_videos"
+    return "none"
+
+
+def _latest_version(versions: List) -> Optional[object]:
+    """Return the version tagged ``latest``, else the first, else None."""
+    for v in versions:
+        if "latest" in (getattr(v, "aliases", None) or []):
+            return v
+    return versions[0] if versions else None
+
+
+def _find_slp(directory: str) -> Optional[str]:
+    """Return the first ``.slp``/``.pkg.slp`` file under ``directory`` (sorted)."""
+    import glob
+
+    matches = sorted(glob.glob(os.path.join(directory, "**", "*.slp"), recursive=True))
+    return matches[0] if matches else None
+
+
 def make_dataset_artifact(
     artifact_name: str,
     dataset_path: str,
