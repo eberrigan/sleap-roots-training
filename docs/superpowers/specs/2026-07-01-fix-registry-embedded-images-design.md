@@ -58,6 +58,17 @@ Grounded against a real embedded package on Z: and the installed `sleap_v1.4.1` 
   Repairs use plain `with_images=True` (not `embed_all_labeled`/`embed_suggested`) to
   stay content-equivalent to how training splits are built today. `.pkg.slp` filenames
   pass through `save()` unchanged (only a trailing `.slp` is required).
+- **Native filepath remapping (verified in `sleap/io/dataset.py`).**
+  `sleap.load_file(filename, detect_videos=True, search_paths=None, match_to=None)`
+  relocates missing videos: `search_paths` is a path or list of paths (a video file or
+  its containing folder), and the underlying `find_path_using_paths(missing_path,
+  search_paths)` matches **by basename** (handling mixed `/` and `\`), returning the
+  first hit. `Labels.load_file(..., video_search=<Callable | List[str]>)` also accepts a
+  **callable** for arbitrary matching. This is the same mechanism the GUI's "locate
+  missing videos" flow uses and is preferred over hand-rolled prefix remapping — for our
+  case (a `.slp` referencing a gone `C:/Users/pbiobgh/Box/.../1WFWZA8J.h5` whose real
+  file lives on Z:), pointing `search_paths` at the Z: directory finds the video by
+  basename without needing to know the exact stale prefix.
 - **Registry enumeration (wandb 0.18.7).** `api.registries()` does **not** exist in
   0.18.7 (that is 0.19+). The registry is a project
   `wandb-registry-sleap-roots-labels` under org entity `<entity>-org`. Working calls:
@@ -91,7 +102,7 @@ job keeps working.
 | `has_embedded_images(path) -> bool` | Single source of truth for "trainable on its own." For every video carrying user-labeled frames, requires `HDF5Video` + `has_embedded_images == True`. Returns `False` if any labeled-frame video lacks embedded pixels, or if there are **no** user-labeled frames. |
 | `inspect_package(path) -> dict` | Richer per-file report: `embedded`, `n_user_frames`, per-video `{backend_type, embedded, referenced_path, referenced_exists}`, and `recoverable_via`. |
 | `audit_registry(...) -> pd.DataFrame` | Enumerate collections, inspect each collection's `latest` (default; all-versions optional), build the report table below. |
-| `repair_artifact(collection, *, dry_run=True, path_remap=None)` | Re-embed + re-register a fixed version into the same collection. |
+| `repair_artifact(collection, *, dry_run=True, search_paths=None, video_search=None)` | Re-embed + re-register a fixed version into the same collection. |
 | `make_dataset_artifact(..., require_embedded_images=True)` | Guardrail (see below). |
 
 ### Detection semantics (`has_embedded_images`)
@@ -109,9 +120,9 @@ job keeps working.
    uploaded; the good one still sits on disk. Fix = re-register that file, **no image
    processing**. Cheapest and safest.
 2. **`referenced_videos`** — no embedded pixels, but the referenced video/image files
-   are openable (as-is, or after a Z: path remap). Fix = load labels then
-   `labels.save(out.pkg.slp, with_images=True)` to bake pixels in. Requires the
-   referenced files to be readable at save time.
+   are openable (as-is, or after SLEAP relocates them via `search_paths` basename
+   matching). Fix = load labels then `labels.save(out.pkg.slp, with_images=True)` to
+   bake pixels in. Requires the referenced files to be readable at save time.
 3. **`none`** — no embedded pixels, `data_path` gone/also-non-embedded, and referenced
    videos unreachable. No pixel source left. **Reported (with the paths searched) and
    skipped** for manual attention.
@@ -141,13 +152,13 @@ record produced before any writes. The audit is read-only and can be run directl
 the maintainer's machine (W&B authed via `~/_netrc`, Z: mounted, `sleap_v1.4.1`
 present).
 
-## Repair flow — `repair_artifact(collection, *, dry_run=True, path_remap=None)`
+## Repair flow — `repair_artifact(collection, *, dry_run=True, search_paths=None, video_search=None)`
 
 1. **Tier 1** (`data_path_embedded`): `fixed_path = data_path` on Z: — no re-embedding.
-2. **Tier 2** (`referenced_videos`): download the artifact `.slp`, load it (applying
-   optional `path_remap` for stale prefixes, e.g.
-   `C:/Users/pbiobgh/Box/... → Z:/...`), then
-   `labels.save(fixed_path, with_images=True)`.
+2. **Tier 2** (`referenced_videos`): download the artifact `.slp`, load it with SLEAP's
+   native relocation — `sleap.load_file(downloaded_slp, search_paths=search_paths)` (or a
+   `video_search` callable for arbitrary matching) so missing videos are found by
+   basename — then `labels.save(fixed_path, with_images=True)`.
 3. **Post-condition guard**: assert `has_embedded_images(fixed_path)` is `True`; abort
    the repair if re-embedding did not take.
 4. **Re-register**: call `make_dataset_artifact(artifact_name=<same>,
@@ -192,7 +203,7 @@ than the lightweight `test-imports.yml` job.
 
 - `audit.py` — run `audit_registry`, print summary, save CSV. Read-only.
 - `repair.py` — `--collection <name|all>`, dry-run default, `--apply` to write, optional
-  `--path-remap old=new`.
+  `--search-paths <dir> [<dir> ...]` (forwarded to SLEAP's `search_paths`).
 - `README.md` — usage + the tier explanation.
 
 ## Rollout
@@ -206,9 +217,11 @@ than the lightweight `test-imports.yml` job.
 
 ## Risks / open items
 
-- **Tier-2 path remap**: if referenced paths are stale and no remap rule matches, the
-  artifact falls to `none`. The audit surfaces the searched paths so a remap can be
-  supplied.
+- **Tier-2 relocation**: if referenced videos can't be found under the supplied
+  `search_paths` (basename matching), the artifact falls to `none`. The audit surfaces
+  the referenced paths so appropriate `search_paths` (or a `video_search` callable) can
+  be supplied. Basename collisions (same filename in multiple dirs) resolve to the first
+  hit — order `search_paths` accordingly.
 - **Download volume**: a full audit downloads each `latest` (soybean_lateral alone is
   ~242 MB). Acceptable for a maintainer-run, one-off audit; uses the W&B cache.
 - **Registry API version-coupling**: enumeration is pinned to wandb 0.18.x semantics; a
