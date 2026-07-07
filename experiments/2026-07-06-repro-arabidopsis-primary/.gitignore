@@ -1,0 +1,19 @@
+# Data and model artifacts produced by this experiment (never commit these).
+data/
+wandb/
+models/
+*.slp
+*.pkg.slp
+*.h5
+*.npz
+*.png
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Generated per-run configs (the base template in configs/ IS committed).
+initial_config_modified_v*.json
+sweep_config_v*.json
+modified_config_v*.json
+train_test_splits*.csv
+_labels_path.txt
